@@ -1,0 +1,59 @@
+
+services:
+    postgres:
+        container_name: postgresql
+        image: postgres:latest
+        environment: 
+           - POSTGRES_DB=aerodb
+           - POSTGRES_PASSWORD=postgres
+           - POSTGRES_USER=postgres
+        ports:
+           - 5454:5432
+        volumes:
+           - pgdata:/var/lib/postgresql/data
+    kafka:
+        container_name: kafka
+        image: apache/kafka-native:4.0.0
+        ports:
+          - '9092:9092'   
+          - '29092:29092'
+        environment:
+          KAFKA_PROCESS_ROLES: broker,controller
+          KAFKA_NODE_ID: 1
+          KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+          KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+          KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+          KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,EXTERNAL://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:29092,CONTROLLER://kafka:9093
+          KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+          KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+          KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+        networks:
+          - kafka-net
+    minio:
+        image: minio/minio
+        environment:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
+          MINIO_NOTIFY_KAFKA_ENABLE_1: "on"
+          MINIO_NOTIFY_KAFKA_BROKERS_1: "kafka:9092"
+          MINIO_NOTIFY_KAFKA_TOPIC_1: "raw-media-metadata"
+          MINIO_NOTIFY_KAFKA_ENABLE_2: "on"  
+          MINIO_NOTIFY_KAFKA_BROKERS_2: "kafka:9092"
+          MINIO_NOTIFY_KAFKA_TOPIC_2: "processed-media-metadata"
+        command: server /data --console-address ':9001'
+        ports:
+          - '9000:9000'
+          - '9001:9001'
+        volumes:
+          - minio_data:/data
+        networks:
+          - kafka-net
+volumes:
+   minio_data:
+   pgdata:
+   
+networks:
+  kafka-net:
+    driver: bridge

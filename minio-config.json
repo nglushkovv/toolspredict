@@ -1,0 +1,47 @@
+{
+  "version": "33",
+  "credential": {
+    "accessKey": "minioadmin",
+    "secretKey": "minioadmin"
+  },
+  "region": "us-east-1",
+  "browser": "on",
+  "notify": {
+    "kafka": {
+      "1": {
+        "enable": true,
+        "brokers": ["kafka:9092"],
+        "topic": "raw-media-metadata",
+        "sasl": {
+          "enable": false,
+          "mechanism": "plain",
+          "username": "",
+          "password": ""
+        },
+        "tls": {
+          "enable": false,
+          "skipVerify": false,
+          "clientAuth": 0
+        },
+        "version": ""
+      },
+      "2": {
+        "enable": true,
+        "brokers": ["kafka:9092"],
+        "topic": "processed-media-metadata",
+        "sasl": {
+          "enable": false,
+          "mechanism": "plain",
+          "username": "",
+          "password": ""
+        },
+        "tls": {
+          "enable": false,
+          "skipVerify": false,
+          "clientAuth": 0
+        },
+        "version": ""
+      }
+    }
+  }
+}

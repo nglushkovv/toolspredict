@@ -1,0 +1,51 @@
+spring:
+    application:
+        name: @project.artifactId@
+        version: @project.version@
+    datasource:
+        driver-class-name: org.postgresql.Driver
+        url: jdbc:postgresql://localhost:5454/aerodb
+        username: postgres
+        password: postgres
+    flyway:
+        locations: classpath:db/migration
+        schemas: flyway
+        out-of-order: true
+        validate-on-migrate: true
+        encoding: UTF-8
+        enabled: true
+    kafka:
+        consumer:
+            bootstrap-servers: localhost:29092
+            group-id: @project.artifactId@
+            auto-offset-reset: earliest
+            key-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+            value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+            enable-auto-commit: true
+            properties:
+              bootstrap-servers: localhost:29092
+              spring.deserializer.key.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
+              spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+              spring.json.value.default.type: com.lctproject.toolspredict.model.minio.RecordsDto
+              spring.json.trusted.packages: com.lctproject.toolspredict.model.*
+
+minio:
+    endpoint: http://localhost:9000
+    access:
+        key: minioadmin
+    secret:
+        key: minioadmin
+
+integration:
+    topics:
+        raw: raw-media-metadata
+        processed: processed-media-metadata
+    minio:
+        bucket-raw: "bucket-raw"
+        bucket-processed: "bucket-processed"
+        bucket-results: "bucket-results"
+logging:
+    level:
+        org.apache.kafka.clients.consumer.ConsumerConfig: DEBUG
+        org.springframework.kafka.listener: DEBUG
+        root: info
