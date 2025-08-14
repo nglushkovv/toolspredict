@@ -14,30 +14,48 @@ import org.springframework.web.multipart.MultipartFile;
 public class ToolsPredictContoller {
 
     @CrossOrigin
-    @PostMapping(value = "/uploadToolkitFile", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping(value = "/uploadFile", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Загрузка файла для последующей обработки CV и присвоения категории набору инструментов.")
     public ResponseEntity<String> uploadFile(@Parameter(description = "Фото/Видео для обработки и построения прогноза")
-                                             @RequestParam("file") MultipartFile file) {
+                                             @RequestParam("file") MultipartFile file,
+                                             @Parameter(description = "id процесса")
+                                             @RequestParam(value = "id", required = false) Long jobId) {
         return ResponseEntity.ok("Ну тут короче можно idшник операции вернуть");
     }
 
     @CrossOrigin
-    @GetMapping(value = "/getToolkitResult")
+    @GetMapping(value = "/getJobInfo")
     @Operation(summary = "Получить результат прогноза")
-    public ResponseEntity<String> getPredictResult(@Parameter(description = "ID операции")
-                                                   @RequestParam("id") Long id) {
+    public ResponseEntity<String> getJobInfo(@Parameter(description = "ID операции")
+                                                   @RequestParam("id") Long jobId) {
         return ResponseEntity.ok("Результат / Статус операции");
     }
 
     @CrossOrigin
-    @GetMapping("/getToolkitPages")
+    @GetMapping("/getJobPage")
     @Operation(summary = "Получить страницу списка процессов обработки и прогнозов")
-    public Page<String> getToolkitPage(@Parameter(description = "Фильтрация")
+    public Page<String> getJobPage(@Parameter(description = "Фильтрация")
                                        @RequestParam("query") String query,
                                        @Parameter(description = "Номер страницы")
                                        @RequestParam("page") int page,
                                        @Parameter(description = "Размер страницы")
                                        @RequestParam("size") int size) {
         return null;
+    }
+
+    @CrossOrigin
+    @DeleteMapping("/deleteJob")
+    @Operation(summary = "Удалить процесс")
+    public void deleteJob(@Parameter(description = "Удалить существующий job")
+                          @RequestParam Long jobId) {
+        return;
+    }
+
+    @CrossOrigin
+    @DeleteMapping("/deleteFile")
+    @Operation(summary = "Удалить файл из MiniO")
+    public void deleteFile(@Parameter(description = "id_файла")
+                           @RequestParam Long fileId) {
+        return;
     }
 }
