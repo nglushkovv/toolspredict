@@ -1,6 +1,6 @@
 package com.lctproject.toolspredict.kafka;
 
-import com.lctproject.toolspredict.model.minio.RecordsDto;
+import com.lctproject.toolspredict.model.minio.MinioEventDto;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -14,7 +14,7 @@ public class RawListener {
             topics = "${integration.topics.raw}",
             groupId = "raw-group"
     )
-    void listen(RecordsDto recordsDto) {
-        log.info(recordsDto.getRecords().get(0).getS3().getKey().getKey());
+    void listen(MinioEventDto eventDto) {
+        log.info(eventDto.getKey());
     }
 }
