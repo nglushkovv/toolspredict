@@ -1,5 +1,6 @@
 package com.lctproject.toolspredict.model.minio;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -10,13 +11,8 @@ import lombok.Setter;
 @AllArgsConstructor
 @NoArgsConstructor
 public class MinioEventDto {
+    @JsonProperty("EventName")
     private String eventName;
-    private String eventVersion;
-    private String eventTime;
-    private UserIdentityDto userIdentity;
-    private S3EntityDto s3;
-
-
-
-
+    @JsonProperty("Key")
+    private String key;
 }
