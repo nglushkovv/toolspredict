@@ -4,12 +4,13 @@ import com.lctproject.toolspredict.service.MinioService;
 import io.minio.BucketExistsArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
+import io.minio.PutObjectArgs;
 import io.minio.errors.*;
 import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.security.InvalidKeyException;
@@ -57,5 +58,24 @@ public class MinioServiceImpl implements MinioService {
                     .bucket(bucketName)
                     .build());
         }
+    }
+    @Override
+    public String uploadFile(MultipartFile file, String bucketName, String packageId) {
+        try {
+            String path = packageId + "/" + file.getOriginalFilename();
+            client.putObject(
+                    PutObjectArgs.builder()
+                            .bucket(bucketName)
+                            .object(path)
+                            .stream(file.getInputStream(), file.getSize(), -1)
+                            .contentType(file.getContentType())
+                            .build()
+            );
+
+            return path;
+        } catch (Exception ex) {
+            log.error("Ошибка загрузки файла в MinIO: {]", ex.getMessage());
+        }
+        return null;
     }
 }
