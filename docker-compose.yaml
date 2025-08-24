@@ -1,4 +1,3 @@
-
 services:
     postgres:
         container_name: postgresql
@@ -50,7 +49,24 @@ services:
           - minio_data:/data
         networks:
           - kafka-net
+    clickhouse:
+        image: clickhouse/clickhouse-server:23.8
+        container_name: clickhouse
+        ports:
+          - "8123:8123" # HTTP-интерфейс (REST/ClickHouse UI)
+          - "9090:9000" # TCP (для JDBC/клиентов)
+          - "9009:9009" # gRPC (необязательно)
+        volumes:
+          - clickhouse_data:/var/lib/clickhouse
+          - ./clickhouse_config/users.d:/etc/clickhouse-server/users.d
+        ulimits:
+            nofile:
+              soft: 262144
+              hard: 262144
+        networks:
+          - kafka-net
 volumes:
+   clickhouse_data:
    minio_data:
    pgdata:
    
