@@ -5,15 +5,14 @@ import lombok.Data;
 
 @Data
 @Entity
-@Table(name = "employee")
-public class Employee {
+@Table(name = "tool", schema = "public")
+public class Tool {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    @Column(name = "name")
+    @Column(name="tool_name")
     private String name;
-    @Column(name = "surname")
-    private String surname;
-    @Column(name = "patronymic")
-    private String patronymic;
+    @ManyToOne
+    @JoinColumn(name = "tool_reference_id")
+    private ToolReference toolReference;
 }

@@ -1,11 +1,12 @@
 package com.lctproject.toolspredict.repository;
 
-import com.lctproject.toolspredict.model.Job;
+import com.lctproject.toolspredict.model.Order;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
-@Repository
-public interface ProcessingJobsRepository extends JpaRepository<Job, Long> {
+import java.util.UUID;
 
-    Job findById(long id);
+@Repository
+public interface OrderRepository extends JpaRepository<Order, UUID> {
+
 }

@@ -1,29 +1,29 @@
 package com.lctproject.toolspredict.service.impl;
 
+import com.lctproject.toolspredict.dto.minio.MinioFileDto;
 import com.lctproject.toolspredict.service.MinioService;
-import io.minio.BucketExistsArgs;
-import io.minio.MakeBucketArgs;
-import io.minio.MinioClient;
-import io.minio.PutObjectArgs;
+import io.minio.*;
 import io.minio.errors.*;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 
 @Slf4j
 @Service
 public class MinioServiceImpl implements MinioService {
-    @Value("${integration.minio.bucket-raw}")
+    @Value("${integrations.minio.bucket.raw}")
     private String bucketRaw;
-    @Value("${integration.minio.bucket-processed}")
+    @Value("${integrations.minio.bucket.processed}")
     private String bucketProcessed;
-    @Value("${integration.minio.bucket-results}")
+    @Value("${integrations.minio.bucket.results}")
     private String bucketResult;
     @Value("${minio.endpoint}")
     private String minioEndpoint;
@@ -78,4 +78,80 @@ public class MinioServiceImpl implements MinioService {
         }
         return null;
     }
+
+    @Override
+    public void deleteFile(String bucketName, String key) {
+        try {
+            client.removeObject(
+                    RemoveObjectArgs.builder()
+                            .bucket(bucketName)
+                            .object(key)
+                            .build()
+            );
+        } catch (Exception ex) {
+            log.error("Ошибка при удалении файла в MinIO: {}", ex.getMessage());
+        }
+
+    }
+
+    @Override
+    public String rearrangeFile(String key, Long jobId) {
+        String[] parts = key.split("/");
+        try (InputStream stream = client.getObject(
+                GetObjectArgs.builder()
+                        .bucket(bucketRaw)
+                        .object(parts[1])
+                        .build()
+        )) {
+            var stat = client.statObject(
+                    StatObjectArgs.builder()
+                            .bucket(bucketRaw)
+                            .object(parts[1])
+                            .build()
+            );
+            String contentType = stat.contentType();
+            client.putObject(
+                    PutObjectArgs.builder()
+                            .bucket(bucketRaw)
+                            .object(String.valueOf(jobId) + "/" + parts[1])
+                            .stream(stream, stat.length(), -1)
+                            .contentType(contentType)
+                            .build()
+            );
+            return key;
+        } catch  (Exception ex) {
+            log.error("Ошибка перемещения файла в MinIO: {}", ex.getMessage());
+        }
+        return null;
+    }
+
+    @Override
+    public MinioFileDto getFile(String bucketName, String key) {
+        try {
+            var stat = client.statObject(
+                    StatObjectArgs.builder()
+                            .bucket(bucketName)
+                            .object(key)
+                            .build()
+            );
+
+            InputStream stream = client.getObject(
+                    GetObjectArgs.builder()
+                            .bucket(bucketName)
+                            .object(key)
+                            .build()
+            );
+
+            return new MinioFileDto(
+                    key,
+                    stat.contentType(),
+                    new InputStreamResource(stream)
+            );
+
+        } catch (Exception e) {
+            log.error("Ошибка скачивания файла из MinIO: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+
 }

@@ -2,6 +2,13 @@ spring:
     application:
         name: @project.artifactId@
         version: @project.version@
+    mvc:
+        async:
+            request-timeout: 5000
+    servlet:
+        multipart:
+            max-file-size: 2GB
+            max-request-size: 3GB
     datasource:
         driver-class-name: org.postgresql.Driver
         url: jdbc:postgresql://localhost:5454/aerodb
@@ -36,16 +43,26 @@ minio:
     secret:
         key: minioadmin
 
-integration:
+integrations:
     topics:
         raw: raw-media-metadata
         processed: processed-media-metadata
     minio:
-        bucket-raw: "bucket-raw"
-        bucket-processed: "bucket-processed"
-        bucket-results: "bucket-results"
+        limit: 5
+        bucket:
+            raw: "bucket-raw"
+            processed: "bucket-processed"
+            results: "bucket-results"
+    services:
+        url:
+            preprocess: "http://localhost:8000"
+            inference: "http://localhost:8001"
 logging:
     level:
         org.apache.kafka.clients.consumer.ConsumerConfig: DEBUG
-        org.springframework.kafka.listener: DEBUG
+        org.springframework.kafka.listener: WARN
         root: info
+
+model:
+    confidence:
+        threshold: 0.60

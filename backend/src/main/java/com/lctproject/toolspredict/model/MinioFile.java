@@ -1,6 +1,5 @@
-package com.lctproject.toolspredict.model.minio;
+package com.lctproject.toolspredict.model;
 
-import com.lctproject.toolspredict.model.Job;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -17,7 +16,7 @@ public class MinioFile {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    @JoinColumn(name = "id")
+    @JoinColumn(name = "package_id")
     @ManyToOne(fetch = FetchType.LAZY)
     private Job packageId;
     @Column(name = "created_at")

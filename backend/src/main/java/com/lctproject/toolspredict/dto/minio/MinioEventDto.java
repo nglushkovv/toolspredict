@@ -1,4 +1,4 @@
-package com.lctproject.toolspredict.model.minio;
+package com.lctproject.toolspredict.dto.minio;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;

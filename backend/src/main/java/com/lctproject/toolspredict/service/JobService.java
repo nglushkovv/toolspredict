@@ -1,10 +1,28 @@
 package com.lctproject.toolspredict.service;
 
-import com.lctproject.toolspredict.model.Job;
+import com.lctproject.toolspredict.dto.ActionType;
+import com.lctproject.toolspredict.dto.BucketType;
+import com.lctproject.toolspredict.model.*;
+import org.springframework.data.domain.Page;
+
+import java.util.List;
+import java.util.UUID;
 
 public interface JobService {
 
-    Job createJob();
+    Job createJob(UUID orderId, ActionType actionType);
 
     Job getJob(Long jobId);
+
+    Job updateStatus(Long jobId, String status);
+
+    Page<Accounting> getPage(String query, int page, int size);
+
+    void deleteJob(Long jobId);
+
+    List<MinioFile> getJobFiles(Long jobId, BucketType type);
+
+    List<PreprocessResult> getPreprocessResults(Long jobId);
+
+    List<PredictionResult> getPredictionResults(Long jobId);
 }

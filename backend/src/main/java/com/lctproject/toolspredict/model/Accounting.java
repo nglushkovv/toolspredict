@@ -1,27 +1,28 @@
 package com.lctproject.toolspredict.model;
 
-import com.lctproject.toolspredict.dto.ActionType;
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.Data;
 import lombok.experimental.Accessors;
 
 import java.time.LocalDateTime;
 
-@Getter
-@Setter
+@Data
 @Entity
-@Table(name = "processing_jobs", schema = "public")
+@Table(name = "accounting", schema = "public")
 @Accessors(chain = true)
-public class Job {
+public class Accounting {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    @Column(name = "status")
-    private String status;
+    @JoinColumn(name = "job_id")
+    @ManyToOne
+    private Job job;
+    @Column(name = "action_type")
+    private String actionType;
+    @JoinColumn(name = "order_id")
+    @ManyToOne
+    private Order order;
     @Column(name = "create_date")
     private LocalDateTime createDate;
-    @Column(name = "last_modified")
-    private LocalDateTime lastModified;
 
 }

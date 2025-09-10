@@ -1,29 +1,111 @@
 package com.lctproject.toolspredict.service.impl;
 
-import com.lctproject.toolspredict.model.Job;
-import com.lctproject.toolspredict.repository.ProcessingJobsRepository;
+import com.lctproject.toolspredict.dto.ActionType;
+import com.lctproject.toolspredict.dto.BucketType;
+import com.lctproject.toolspredict.model.*;
+import com.lctproject.toolspredict.repository.*;
 import com.lctproject.toolspredict.service.JobService;
+import com.lctproject.toolspredict.service.MinioFileService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class JobServiceImpl implements JobService {
     private final ProcessingJobsRepository processingJobsRepository;
+    private final OrderRepository orderRepository;
+    private final JobRepository jobRepository;
+    private final PreprocessResultRepository preprocessResultRepository;
+    private final PredictionResultRepository predictionResultRepository;
+    private final MinioFileService minioFileService;
+    private final AccountingRepository accountingRepository;
 
     @Override
-    public Job createJob() {
+    public Job createJob(UUID orderId, ActionType actionType) {
+        Order order = orderRepository.findById(orderId).orElse(null);
+        if (order == null) throw new NullPointerException("Заказ не найден.");
+        if (actionType == ActionType.TOOLS_RETURN &&
+                accountingRepository.findByOrderAndActionType(order, ActionType.TOOLS_ISSUANCE.toString()) == null)
+            throw new IllegalArgumentException("Сдача невозможна - отсутствует выдача.");
+        if (accountingRepository.countByOrder(order) >= 2) {
+            throw new RuntimeException("Невозможно создать job к текущему заказу - уже существуют 2 job'а, открывающий и закрывающий");
+        }
+        if (actionType == ActionType.TOOLS_ISSUANCE &&
+                accountingRepository.findByOrderAndActionType(order, ActionType.TOOLS_ISSUANCE.toString()) != null)
+            throw new IllegalArgumentException("В базе уже есть Job выдачи для этого заказа.");
+
+        log.info("Создание job {} для Order с id={}", actionType.toString(), order.getId());
         Job job = new Job()
-                .setStatus("Предобработка CV")
-                .setCreate_date(LocalDateTime.now())
-                .setLast_modified(LocalDateTime.now());
+                .setStatus("Предобработка")
+                .setCreateDate(LocalDateTime.now())
+                .setLastModified(LocalDateTime.now());
+        job = processingJobsRepository.save(job);
+
+        Accounting accounting = new Accounting()
+                .setActionType(actionType.toString())
+                .setJob(job)
+                .setOrder(order)
+                .setCreateDate(LocalDateTime.now());
+        accountingRepository.save(accounting);
         return job;
+
     }
 
     @Override
     public Job getJob(Long jobId) {
-        return processingJobsRepository.findById(jobId);
+        Job job = processingJobsRepository.findById(jobId).orElse(null);
+        if (job == null) throw new NoSuchElementException("Job не найден.");
+        return job;
+    }
+
+    @Override
+    public Job updateStatus(Long jobId, String status) {
+        Job job = getJob(jobId);
+        job.setStatus(status);
+        return processingJobsRepository.save(job);
+    }
+
+    @Override
+    public Page<Accounting> getPage(String query, int page, int size) {
+        if (query == null) query = "";
+        int pageSize = Math.min(Math.max(size, 1), 50);
+        Pageable pageable = PageRequest.of(page, pageSize, Sort.by("createDate").descending());
+        return accountingRepository.getPage(query, pageable);
+    }
+
+    @Override
+    public void deleteJob(Long jobId) {
+        if (getJob(jobId) == null) return;
+        minioFileService.deleteAllFromJob(getJob(jobId));
+        processingJobsRepository.deleteById(jobId);
+    }
+
+    @Override
+    public List<MinioFile> getJobFiles(Long jobId, BucketType type) {
+        Job job = getJob(jobId);
+        return minioFileService.getMinioFiles(job, type);
+    }
+
+    @Override
+    public List<PreprocessResult> getPreprocessResults(Long jobId) {
+        Job job = getJob(jobId);
+        return preprocessResultRepository.findByJob(job);
+    }
+
+    @Override
+    public List<PredictionResult> getPredictionResults(Long jobId) {
+        Job job = getJob(jobId);
+        return predictionResultRepository.findByJob(job);
     }
 }
