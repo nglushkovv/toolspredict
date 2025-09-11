@@ -8,8 +8,12 @@ from PIL import Image
 import cv2
 import os
 import random
+from ultralytics import YOLO
 
 app = FastAPI()
+
+MODEL_PATH = 'model/best.pt'
+yolo_model = YOLO(MODEL_PATH)
 
 minio_client = Minio(
     settings.minio_endpoint,
@@ -60,30 +64,23 @@ async def preprocess(key: str = Query(..., description="Ключ файла в M
         name, ext = os.path.splitext(filename)
         ext = ext.lower()
 
-        num_detections = random.randint(1, 4)
-
         if ext in [".jpg", ".jpeg", ".png"]:
-            img = Image.open(BytesIO(file_data))
+            img = Image.open(BytesIO(file_data)).convert('RGB')
+            results = yolo_model(img)   
 
-            for i in range(num_detections):
-                macro_class = random.choice(PARENT_CLASSES)
+            for i, box in enumerate(results[0].boxes):
+                class_id = int(box.cls[0]) 
+                conf = float(box.conf[0])
+                xyxy = box.xyxy[0].tolist()
+                macro_class = yolo_model.names[class_id]
 
-                img_resized = img.resize((128, 128))
+                cropped = img.crop((xyxy[0], xyxy[1], xyxy[2], xyxy[3]))
+                cropped = cropped.resize((128, 128))
                 buffer = BytesIO()
-                img_resized.save(buffer, format="JPEG")
+                cropped.save(buffer, format="JPEG")
                 buffer.seek(0)
                 data_bytes = buffer.getvalue()
-
-                path_parts = key.split("/")
-                job_id = path_parts[0]
-                *prefix, filename = path_parts[1:]
-
-                name, ext = os.path.splitext(filename)
-
-                base_path = "/".join(prefix) if prefix else ""
-                result_base = f"{job_id}/{base_path}/{name}" if base_path else f"{job_id}/{name}"
-
-                object_key = f"{result_base}/{macro_class}_{i}.jpg"
+                object_key = f"{job_id}/{name}/{macro_class}_{i}.jpg"
                 minio_client.put_object(
                     bucket_name=bucket_processed,
                     object_name=object_key,
@@ -92,7 +89,11 @@ async def preprocess(key: str = Query(..., description="Ключ файла в M
                     content_type="image/jpeg"
                 )
 
-                preprocess_results[f"{macro_class}_{i}"] = object_key
+                preprocess_results[f"{macro_class}_{i}"] = {
+                    "object_key": object_key,
+                    "confidence": conf,
+                    "bbox": xyxy
+                }
                 sizes.append(f"{len(data_bytes) // 1024}KB")
         else:
             raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")

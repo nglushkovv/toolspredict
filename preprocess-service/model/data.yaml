@@ -1,0 +1,26 @@
+path: /home/jupyter/datasphere/project/yolov8_dataset
+train: train/images
+val: val/images
+test: test/images
+nc: 20
+names:
+- Air_Compressors
+- Bearing
+- Clamp
+- Digital_Caliper
+- Digital_Torque_Wrench
+- Drill_Bit
+- Electric_Drill
+- Fire_Extinguisher
+- First_Aid_Kit
+- Flashlight
+- Metal_Nut
+- Pliers
+- Safety_Glasses
+- Safety_Helmet
+- Screwdriver
+- Socket_Wrench
+- Tape_Measure
+- Voltage_Tester
+- Wirecutter
+- Wrench
