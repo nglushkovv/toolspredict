@@ -140,7 +140,7 @@ async def video_preprocess(key: str = Query(..., description="Ключ виде�
         for idx, frame_idx in enumerate(frame_indices):
             frame = frames[frame_idx]
 
-            img = Image.fromarray(frame)
+            img = Image.fromarray(frame).transpose(Image.FLIP_TOP_BOTTOM)
             img_resized = img.resize((640, 640))
             buffer = BytesIO()
             img_resized.save(buffer, format="JPEG")
