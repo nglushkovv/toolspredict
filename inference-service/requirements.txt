@@ -4,3 +4,7 @@ minio
 pydantic
 python-dotenv
 pydantic-settings
+torch
+torchvision
+pillow
+numpy 

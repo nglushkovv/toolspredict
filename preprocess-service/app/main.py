@@ -75,7 +75,6 @@ async def preprocess(key: str = Query(..., description="Ключ файла в M
                 macro_class = yolo_model.names[class_id]
 
                 cropped = img.crop((xyxy[0], xyxy[1], xyxy[2], xyxy[3]))
-                cropped = cropped.resize((128, 128))
                 buffer = BytesIO()
                 cropped.save(buffer, format="JPEG")
                 buffer.seek(0)
