@@ -12,6 +12,7 @@ import torch
 import json
 from datetime import datetime
 from ultralytics import YOLO
+import av
 
 app = FastAPI()
 
@@ -132,53 +133,49 @@ async def preprocess(key: str = Query(..., description="Ключ файла в M
 @app.post("/video/cut")
 async def video_preprocess(key: str = Query(..., description="Ключ видео в Minio")):
     bucket_raw = settings.minio_bucket_raw
-    bucket_processed = settings.minio_bucket_processed
+
     try:
         response = minio_client.get_object(bucket_raw, key)
-        file_data = response.read()
-        response.close()
-        response.release_conn()
-
-        preprocess_results = {}
-        sizes = []
-
-        filename = key.split("/")[-1]
         job_id = key.split("/")[0]
+        filename = os.path.basename(key)
         name, ext = os.path.splitext(filename)
 
         if ext.lower() != ".mp4":
             raise HTTPException(status_code=400, detail="Not an mp4 file")
+        container = av.open(response)
+        video_stream = container.streams.video[0]
 
-        frames = list(iio.imiter(file_data, extension=".mp4"))
-        total_frames = len(frames)
+        total_frames = int(video_stream.frames)
         if total_frames == 0:
             raise HTTPException(status_code=400, detail="Video has no frames")
 
         num_frames = min(3, total_frames)
-        frame_indices = random.sample(range(total_frames), num_frames)
+        frame_indices = sorted(random.sample(range(total_frames), num_frames))
+        preprocess_results = {}
+        sizes = []
 
-        for idx, frame_idx in enumerate(frame_indices):
-            frame = frames[frame_idx]
-
-            img = Image.fromarray(frame).transpose(Image.FLIP_TOP_BOTTOM)
-            img_resized = img.resize((640, 640))
+        for idx, target in enumerate(frame_indices):
+            container.seek(int(target / video_stream.average_rate * av.time_base))
+            frame = next(container.decode(video_stream))
             buffer = BytesIO()
-            img_resized.save(buffer, format="JPEG")
+            frame.to_image().save(buffer, format="JPEG", quality=95)
             buffer.seek(0)
-            data_bytes = buffer.getvalue()
 
             object_key = f"{job_id}/{name}/frame{idx}.jpg"
             minio_client.put_object(
                 bucket_name=bucket_raw,
                 object_name=object_key,
-                data=BytesIO(data_bytes),
-                length=len(data_bytes),
+                data=buffer,
+                length=buffer.getbuffer().nbytes,
                 content_type="image/jpeg"
             )
 
-
             preprocess_results[f"frame_{idx}"] = object_key
-            sizes.append(f"{len(data_bytes) // 1024}KB")
+            sizes.append(f"{buffer.getbuffer().nbytes // 1024}KB")
+            buffer.close()
+
+        container.close()
+        response.close()
 
     except Exception as e:
         raise HTTPException(status_code=500, detail={"status": "error", "message": str(e)})
@@ -187,5 +184,5 @@ async def video_preprocess(key: str = Query(..., description="Ключ виде�
         "status": "ok",
         "preprocessResults": preprocess_results,
         "size": sizes,
-        "message": "Video split into frames successfully"
+        "message": f"Extracted {len(preprocess_results)} frames successfully"
     })
