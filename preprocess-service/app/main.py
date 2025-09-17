@@ -8,6 +8,9 @@ from PIL import Image
 import cv2
 import os
 import random
+import torch
+import json
+from datetime import datetime
 from ultralytics import YOLO
 
 app = FastAPI()
@@ -66,26 +69,42 @@ async def preprocess(key: str = Query(..., description="Ключ файла в M
 
         if ext in [".jpg", ".jpeg", ".png"]:
             img = Image.open(BytesIO(file_data)).convert('RGB')
-            results = yolo_model(img)   
+            results = yolo_model(img)
+
+            if len(results[0].boxes) == 0:
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "status": "no_detections",
+                        "message": "Model didn't detect any known tool in the image.",
+                    }
+                )
 
             for i, box in enumerate(results[0].boxes):
-                class_id = int(box.cls[0]) 
+                class_id = int(box.cls[0])
                 conf = float(box.conf[0])
-                xyxy = box.xyxy[0].tolist()
+                xyxy = [float(x) for x in box.xyxy[0].tolist()]
                 macro_class = yolo_model.names[class_id]
 
-                cropped = img.crop((xyxy[0], xyxy[1], xyxy[2], xyxy[3]))
-                buffer = BytesIO()
-                cropped.save(buffer, format="JPEG")
-                buffer.seek(0)
-                data_bytes = buffer.getvalue()
-                object_key = f"{job_id}/{name}/{macro_class}_{i}.jpg"
+                detection_obj = {
+                    "source_image_key": key,
+                    "object_key": f"{job_id}/{name}/{macro_class}_{i}.json",
+                    "class_id": class_id,
+                    "macro_class": macro_class,
+                    "confidence": conf,
+                    "bbox": xyxy,
+                    "timestamp": datetime.utcnow().isoformat() + "Z"
+                }
+
+                data_bytes = json.dumps(detection_obj, ensure_ascii=False).encode("utf-8")
+                object_key = detection_obj["object_key"]
+
                 minio_client.put_object(
                     bucket_name=bucket_processed,
                     object_name=object_key,
                     data=BytesIO(data_bytes),
                     length=len(data_bytes),
-                    content_type="image/jpeg"
+                    content_type="application/json"
                 )
 
                 preprocess_results[f"{macro_class}_{i}"] = {
@@ -97,6 +116,8 @@ async def preprocess(key: str = Query(..., description="Ключ файла в M
         else:
             raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail={"status": "error", "message": str(e)})
 
