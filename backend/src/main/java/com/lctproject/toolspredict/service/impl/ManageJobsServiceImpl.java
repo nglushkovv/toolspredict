@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 
 @Service
@@ -35,15 +36,23 @@ public class ManageJobsServiceImpl implements ManageJobsService {
         String result;
         String rawFileKey = addRawFile(file, jobId);
         if (rawFileKey.substring(rawFileKey.lastIndexOf('.')+1).equals("mp4")) {
+            int countSaved = 0;
+            StringBuilder builder = new StringBuilder();
             PreprocessResponse response = getFrames(rawFileKey, jobId);
             for (Map.Entry<String, String> entry: response.getPreprocessResults().entrySet()) {
                 try {
                     PreprocessResponse frameResponse = getProcessedFiles(entry.getValue(), jobId);
                     logService.logPreprocessResult(jobId, frameResponse, entry.getValue());
+                    countSaved++;
+                } catch (NoSuchElementException e) {
+                    log.error("Ошибка: модели не удалось распознать инструменты в кадре {}", entry.getValue());
+                    builder.append(entry.getValue()).append(": ").append(e.getMessage()).append("\n");
                 } catch (Exception ex) {
                     log.error("Ошибка отправки кадра на предобработку: {}", ex.getMessage());
+                    builder.append(entry.getValue()).append(": ").append(ex.getMessage()).append("\n");
                 }
             }
+            if (countSaved == 0) throw new RuntimeException(builder.toString());
         } else {
             PreprocessResponse response = getProcessedFiles(rawFileKey, jobId);
             logService.logPreprocessResult(jobId, response, rawFileKey);
@@ -69,37 +78,32 @@ public class ManageJobsServiceImpl implements ManageJobsService {
 
     @Override
     public PreprocessResponse getProcessedFiles(String minioKey, Long jobId) {
+        Job job = jobService.getJob(jobId);
         try {
             ResponseEntity<?> response = senderService.sendToPreprocess(minioKey);
             PreprocessResponse preprocessResponse = (PreprocessResponse) response.getBody();
             if (preprocessResponse == null) throw new NullPointerException("PreprocessResponse is null");
-            Job job = jobService.getJob(jobId);
             for (Map.Entry<String, String> entry : preprocessResponse.getPreprocessResults().entrySet()){
                 log.info(entry.getValue());
                 minioFileService.create(bucketProcessed, entry.getValue(), job);
             }
-            log.info("Успех {}", String.valueOf(jobId));
+            jobService.updateStatus(job.getId(), "PREPROCESS");
+            log.info("Успех {}", jobId);
             return preprocessResponse;
-        } catch (Exception ex) {
-            log.error("Ошибка {}", ex.getMessage());
+        } catch (NoSuchElementException e) {
+            throw new NoSuchElementException(e.getMessage());
         }
-        return null;
     }
 
     public PreprocessResponse getFrames(String minioKey, Long jobId) {
-        try {
-            ResponseEntity<?> response = senderService.sendVideoToCut(minioKey);
-            PreprocessResponse preprocessResponse = (PreprocessResponse) response.getBody();
-            if (preprocessResponse == null) throw new NullPointerException("PreprocessResponse is null");
-            Job job = jobService.getJob(jobId);
-            for (Map.Entry<String, String> entry : preprocessResponse.getPreprocessResults().entrySet()){
-                minioFileService.create(bucketRaw, entry.getValue(), job);
-            }
-            return preprocessResponse;
-        } catch (Exception ex) {
-            log.error("Ошибка получения кадров {}", ex.getMessage());
+        ResponseEntity<?> response = senderService.sendVideoToCut(minioKey);
+        PreprocessResponse preprocessResponse = (PreprocessResponse) response.getBody();
+        if (preprocessResponse == null) throw new NullPointerException("PreprocessResponse is null");
+        Job job = jobService.getJob(jobId);
+        for (Map.Entry<String, String> entry : preprocessResponse.getPreprocessResults().entrySet()){
+            minioFileService.create(bucketRaw, entry.getValue(), job);
         }
-        return null;
+        return preprocessResponse;
     }
 
     @Override
