@@ -50,8 +50,7 @@ public class JobContoller {
                                              @Parameter(description = "id процесса")
                                              @PathVariable Long jobId) {
         try {
-            manageJobsService.processFile(file, jobId);
-            return ResponseEntity.ok("ОК");
+            return ResponseEntity.ok(manageJobsService.processFile(file, jobId));
         } catch (NoSuchElementException ex) {
             jobService.updateStatus(jobId, "ALERT! MANUAL MAPPING IS REQUIRED.");
             return new ResponseEntity<>("Модели не удалось распознать инструменты на фото.", HttpStatus.UNPROCESSABLE_ENTITY);

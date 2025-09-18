@@ -6,7 +6,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 public interface ManageJobsService {
 
-    void processFile(MultipartFile file, Long jobId);
+    String processFile(MultipartFile file, Long jobId);
 
     String addRawFile(MultipartFile file, Long jobId);
 

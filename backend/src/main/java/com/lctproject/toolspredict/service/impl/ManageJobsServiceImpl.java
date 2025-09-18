@@ -32,7 +32,7 @@ public class ManageJobsServiceImpl implements ManageJobsService {
     private String bucketProcessed;
 
     @Override
-    public void processFile(MultipartFile file, Long jobId) {
+    public String processFile(MultipartFile file, Long jobId) {
         String result;
         String rawFileKey = addRawFile(file, jobId);
         if (rawFileKey.substring(rawFileKey.lastIndexOf('.')+1).equals("mp4")) {
@@ -44,6 +44,7 @@ public class ManageJobsServiceImpl implements ManageJobsService {
                     PreprocessResponse frameResponse = getProcessedFiles(entry.getValue(), jobId);
                     logService.logPreprocessResult(jobId, frameResponse, entry.getValue());
                     countSaved++;
+                    builder.append(entry.getValue()).append(": ").append("OK").append("\n");
                 } catch (NoSuchElementException e) {
                     log.error("Ошибка: модели не удалось распознать инструменты в кадре {}", entry.getValue());
                     builder.append(entry.getValue()).append(": ").append(e.getMessage()).append("\n");
@@ -53,9 +54,11 @@ public class ManageJobsServiceImpl implements ManageJobsService {
                 }
             }
             if (countSaved == 0) throw new RuntimeException(builder.toString());
+            return builder.toString();
         } else {
             PreprocessResponse response = getProcessedFiles(rawFileKey, jobId);
             logService.logPreprocessResult(jobId, response, rawFileKey);
+            return "OK";
         }
     }
 
