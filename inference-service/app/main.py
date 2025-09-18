@@ -95,20 +95,26 @@ def load_model_on_startup():
 async def classify(request: ProcessedFilesRequest):
     results = {}
     input_bucket = getattr(settings, "minio_bucket_processed")
-    
+    raw_bucket = getattr(settings, "minio_bucket_raw")
     model_service: ModelService = app.state.model_service
 
     for raw_file, processed_files in request.packages.items():
         results[raw_file] = {}
         for p_file in processed_files:
             try:
-                # 1) Скачиваем изображение из MinIO
-                img = get_image_from_minio(input_bucket, p_file)
+                resp = minio_client.get_object(input_bucket, p_file)
+                data = resp.read()
+                resp.close()
+                resp.release_conn()
+                meta = json.loads(data.decode("utf-8"))
 
-                # 2) Предикт модели
-                macro_name, macro_id, conf = model_service.predict_pil(img)
+                source_key = meta["source_image_key"]
+                bbox = meta["bbox"]
 
-                # 3) Тестовый выбор микрокласса на основе макрокласса
+                img = get_image_from_minio(raw_bucket, source_key)
+                cropped = img.crop((bbox[0], bbox[1], bbox[2], bbox[3]))
+
+                macro_name, macro_id, conf = model_service.predict_pil(cropped)
                 micro_candidates = MICROCLASSES.get(macro_id, None)
                 if micro_candidates:
                     microclass = random.choice(micro_candidates)
@@ -122,7 +128,6 @@ async def classify(request: ProcessedFilesRequest):
                     "confidence": round(conf, 4)
                 }
             except Exception as e:
-                # Фолбэк при ошибке
                 result_entry = {
                     "macroclass": "Unknown",
                     "macroclass_id": None,
