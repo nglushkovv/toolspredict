@@ -8,11 +8,13 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.NoSuchElementException;
 import java.util.UUID;
 
 @CrossOrigin
@@ -48,8 +50,10 @@ public class JobContoller {
                                              @Parameter(description = "id процесса")
                                              @PathVariable Long jobId) {
         try {
-            manageJobsService.processFile(file, jobId);
-            return ResponseEntity.ok("ОК");
+            return ResponseEntity.ok(manageJobsService.processFile(file, jobId));
+        } catch (NoSuchElementException ex) {
+            jobService.updateStatus(jobId, "ALERT! MANUAL MAPPING IS REQUIRED.");
+            return new ResponseEntity<>("Модели не удалось распознать инструменты на фото.", HttpStatus.UNPROCESSABLE_ENTITY);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }

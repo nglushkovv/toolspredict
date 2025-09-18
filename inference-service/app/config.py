@@ -6,7 +6,8 @@ class Settings(BaseSettings):
     minio_secret_key: str
     minio_bucket_raw: str
     minio_bucket_processed: str
-
+    minio_bucket_results: str
+    
     class Config:
         env_file = ".env"
 

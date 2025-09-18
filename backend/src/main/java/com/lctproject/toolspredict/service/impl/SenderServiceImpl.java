@@ -10,11 +10,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClientException;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.*;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import java.util.List;
+import java.util.NoSuchElementException;
 
 @Slf4j
 @Service
@@ -47,12 +46,13 @@ public class SenderServiceImpl implements SenderService {
                 errorBody.setMessage("Предобработка вернула статус: " + response.getStatusCode());
                 return ResponseEntity.status(response.getStatusCode()).body(errorBody);
             }
+        } catch (HttpClientErrorException.UnprocessableEntity e) {
+            throw new NoSuchElementException("Модели не удалось распознать инструменты на фото.");
+        } catch (ResourceAccessException e) {
+            throw new RuntimeException("Ошибка: не удалось установить соединение с сервисом предобработки.");
         } catch (RestClientException e) {
             log.error("Ошибка отправки файла на предобработку: {}", e.getMessage());
-            PreprocessResponse errorBody = new PreprocessResponse();
-            errorBody.setStatus("error");
-            errorBody.setMessage("Ошибка отправки файла на предобработку: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorBody);
+            throw new RuntimeException("Неизвестная ошибка: " + e.getMessage());
         }
     }
 
@@ -67,6 +67,8 @@ public class SenderServiceImpl implements SenderService {
             } else {
                 return ResponseEntity.status(response.getStatusCode()).body(response.getBody());
             }
+        } catch (ResourceAccessException e) {
+            throw new RuntimeException("Ошибка: не удалось установить соединение с сервисом классификации");
         } catch (RestClientException e) {
             log.error("Ошибка отправки пакета ключей файлов на классификацию: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
@@ -91,12 +93,11 @@ public class SenderServiceImpl implements SenderService {
                 errorBody.setMessage("Предобработка видео вернула статус: " + response.getStatusCode());
                 return ResponseEntity.status(response.getStatusCode()).body(errorBody);
             }
+        } catch (ResourceAccessException  e) {
+            throw new RuntimeException("Ошибка: не удалось установить соединение с сервисом предобработки");
         } catch (RestClientException e) {
             log.error("Ошибка отправки видеофайла на разеделение по кадрам: {}", e.getMessage());
-            PreprocessResponse errorBody = new PreprocessResponse();
-            errorBody.setStatus("error");
-            errorBody.setMessage("Ошибка отправки видеофайла на предобработку: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorBody);
+            throw new RuntimeException("Неизвестная ошибка: " + e.getMessage());
         }
     }
 
