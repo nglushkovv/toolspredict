@@ -2,6 +2,7 @@ from fastapi import FastAPI, Query, HTTPException
 from fastapi.responses import JSONResponse
 from minio import Minio
 import imageio.v3 as iio
+from app.SeekableMinioStream import SeekableMinioStream
 from app.config import settings
 from io import BytesIO
 from PIL import Image
@@ -86,10 +87,12 @@ async def preprocess(key: str = Query(..., description="Ключ файла в M
                 conf = float(box.conf[0])
                 xyxy = [float(x) for x in box.xyxy[0].tolist()]
                 macro_class = yolo_model.names[class_id]
+                base_key = os.path.splitext(key)[0]
+                object_key = f"{base_key}/{macro_class}_{i}.json"
 
                 detection_obj = {
                     "source_image_key": key,
-                    "object_key": f"{job_id}/{name}/{macro_class}_{i}.json",
+                    "object_key": object_key,
                     "class_id": class_id,
                     "macro_class": macro_class,
                     "confidence": conf,
@@ -108,11 +111,7 @@ async def preprocess(key: str = Query(..., description="Ключ файла в M
                     content_type="application/json"
                 )
 
-                preprocess_results[f"{macro_class}_{i}"] = {
-                    "object_key": object_key,
-                    "confidence": conf,
-                    "bbox": xyxy
-                }
+                preprocess_results[f"{macro_class}_{i}"] = object_key
                 sizes.append(f"{len(data_bytes) // 1024}KB")
         else:
             raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
@@ -136,16 +135,19 @@ async def video_preprocess(key: str = Query(..., description="Ключ виде�
 
     try:
         response = minio_client.get_object(bucket_raw, key)
+        stream = SeekableMinioStream(response)
+
         job_id = key.split("/")[0]
         filename = os.path.basename(key)
         name, ext = os.path.splitext(filename)
 
         if ext.lower() != ".mp4":
             raise HTTPException(status_code=400, detail="Not an mp4 file")
-        container = av.open(response)
+
+        container = av.open(stream)
         video_stream = container.streams.video[0]
 
-        total_frames = int(video_stream.frames)
+        total_frames = int(video_stream.frames or 0)
         if total_frames == 0:
             raise HTTPException(status_code=400, detail="Video has no frames")
 
@@ -186,3 +188,6 @@ async def video_preprocess(key: str = Query(..., description="Ключ виде�
         "size": sizes,
         "message": f"Extracted {len(preprocess_results)} frames successfully"
     })
+
+def strip_extension(key: str) -> str:
+    return os.path.splitext(key)[0]
