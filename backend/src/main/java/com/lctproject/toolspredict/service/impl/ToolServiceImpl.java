@@ -70,4 +70,14 @@ public class ToolServiceImpl implements ToolService {
         Pageable pageable = PageRequest.of(page, pageSize, Sort.by("id").descending());
         return toolOrderItemRepository.findAllByOrder(order, pageable);
     }
+
+    @Override
+    public List<Tool> getToolsByList(List<Long> toolIdList) {
+        return toolRepository.findAllById(toolIdList);
+    }
+
+    @Override
+    public void deleteToolOrderItem(Long id) {
+        toolOrderItemRepository.deleteById(id);
+    }
 }

@@ -19,4 +19,9 @@ public interface ToolService {
     List<Tool> getAllTools();
 
     Page<ToolOrderItem> getToolOrderPage(Order order, int page, int size);
+
+    List<Tool> getToolsByList(List<Long> toolIdList);
+
+
+    void deleteToolOrderItem(Long id);
 }

@@ -34,4 +34,13 @@ public interface PredictionResultRepository extends JpaRepository<PredictionResu
                 GROUP BY tool_id;
        """, nativeQuery = true)
     List<Object[]> findMaxToolCountPerJob(@Param("jobId") Long jobId);
+
+    @Query("""
+    select pr
+    from PredictionResult pr
+    join pr.preprocessResult ppr
+    where ppr.job.id = :jobId
+    order by pr.tool.id
+""")
+    List<PredictionResult> findAllByJobIdOrderByToolId(@Param("jobId") Long jobId);
 }

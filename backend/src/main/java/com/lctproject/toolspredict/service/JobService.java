@@ -2,6 +2,7 @@ package com.lctproject.toolspredict.service;
 
 import com.lctproject.toolspredict.dto.ActionType;
 import com.lctproject.toolspredict.dto.BucketType;
+import com.lctproject.toolspredict.dto.JobStatus;
 import com.lctproject.toolspredict.model.*;
 import org.springframework.data.domain.Page;
 
@@ -14,7 +15,7 @@ public interface JobService {
 
     Job getJob(Long jobId);
 
-    Job updateStatus(Long jobId, String status);
+    void updateStatus(Long jobId, JobStatus status);
 
     Page<Accounting> getPage(String query, int page, int size);
 

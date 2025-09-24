@@ -43,6 +43,7 @@ public class LogServiceImpl implements LogService {
     public void logPreprocessResult(Long jobId, PreprocessResponse preprocessResponse, String rawFileKey) {
         for (Map.Entry<String, String> entry: preprocessResponse.getPreprocessResults().entrySet()) {
             String toolReferenceName = entry.getKey().substring(0, entry.getKey().lastIndexOf("_"));
+            log.info(toolReferenceName);
             log.info("{} + {}", entry.getValue(), bucketRaw);
             PreprocessResult preprocessResult = new PreprocessResult()
                     .setJob(jobService.getJob(jobId))

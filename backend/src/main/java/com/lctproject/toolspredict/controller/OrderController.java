@@ -2,6 +2,7 @@ package com.lctproject.toolspredict.controller;
 
 import com.lctproject.toolspredict.dto.OrderRequest;
 import com.lctproject.toolspredict.service.OrderService;
+import com.lctproject.toolspredict.service.ToolService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -15,9 +16,11 @@ import java.util.UUID;
 @Tag(name="Управление заказами", description = "API ToolsPredict")
 public class OrderController {
     private final OrderService orderService;
+    private final ToolService toolService;
 
-    public OrderController(OrderService orderService) {
+    public OrderController(OrderService orderService, ToolService toolService) {
         this.orderService = orderService;
+        this.toolService = toolService;
     }
 
     @GetMapping
@@ -69,5 +72,23 @@ public class OrderController {
     public ResponseEntity<String> delete(@PathVariable UUID orderId) {
         orderService.deleteOrder(orderId);
         return ResponseEntity.ok("Заказ успешно удалён.");
+    }
+
+    @DeleteMapping("/{orderId}/tool")
+    @Operation(summary = "Удалить инструмент из заказа")
+    public ResponseEntity<?> deleteToolOrderItem(@Parameter(description = "Уникальный идентификатор заказанного инструмента")
+                                                 @RequestParam Long id) {
+        toolService.deleteToolOrderItem(id);
+        return ResponseEntity.ok("OK");
+    }
+
+    @PostMapping("/{orderId}/tool")
+    @Operation(summary = "Добавить инструмент в заказ")
+    public ResponseEntity<?> addToolOrderItem(@Parameter(description = "Идентификатор заказа")
+                                              @PathVariable UUID orderId,
+                                              @Parameter(description = "Идентификатор инструмента")
+                                              @RequestParam Long toolId) {
+        toolService.addToolOrderItem(toolId, orderService.getOrder(orderId));
+        return ResponseEntity.ok("OK");
     }
 }

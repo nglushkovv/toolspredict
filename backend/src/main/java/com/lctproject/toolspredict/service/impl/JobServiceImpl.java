@@ -2,6 +2,7 @@ package com.lctproject.toolspredict.service.impl;
 
 import com.lctproject.toolspredict.dto.ActionType;
 import com.lctproject.toolspredict.dto.BucketType;
+import com.lctproject.toolspredict.dto.JobStatus;
 import com.lctproject.toolspredict.model.*;
 import com.lctproject.toolspredict.repository.*;
 import com.lctproject.toolspredict.service.JobService;
@@ -70,10 +71,10 @@ public class JobServiceImpl implements JobService {
     }
 
     @Override
-    public Job updateStatus(Long jobId, String status) {
+    public void updateStatus(Long jobId, JobStatus status) {
         Job job = getJob(jobId);
-        job.setStatus(status);
-        return processingJobsRepository.save(job);
+        job.setStatus(status.toString());
+        processingJobsRepository.save(job);
     }
 
     @Override
@@ -107,5 +108,9 @@ public class JobServiceImpl implements JobService {
     public List<PredictionResult> getPredictionResults(Long jobId) {
         Job job = getJob(jobId);
         return predictionResultRepository.findByJob(job);
+    }
+
+    public List<Tool> getToolResults(Long jobId) {
+        return null;
     }
 }

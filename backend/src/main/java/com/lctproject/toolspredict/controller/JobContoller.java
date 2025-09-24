@@ -1,6 +1,7 @@
 package com.lctproject.toolspredict.controller;
 import com.lctproject.toolspredict.dto.ActionType;
 import com.lctproject.toolspredict.dto.BucketType;
+import com.lctproject.toolspredict.dto.JobStatus;
 import com.lctproject.toolspredict.service.ComparsionService;
 import com.lctproject.toolspredict.service.JobService;
 import com.lctproject.toolspredict.service.ManageJobsService;
@@ -8,11 +9,13 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.NoSuchElementException;
 import java.util.UUID;
 
 @CrossOrigin
@@ -48,8 +51,9 @@ public class JobContoller {
                                              @Parameter(description = "id процесса")
                                              @PathVariable Long jobId) {
         try {
-            manageJobsService.processFile(file, jobId);
-            return ResponseEntity.ok("ОК");
+            return ResponseEntity.ok(manageJobsService.processFile(file, jobId));
+        } catch (NoSuchElementException ex) {
+            return new ResponseEntity<>("Модели не удалось распознать инструменты на фото.", HttpStatus.UNPROCESSABLE_ENTITY);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
@@ -133,4 +137,29 @@ public class JobContoller {
             return ResponseEntity.badRequest().body(ex.getMessage());
         }
     }
+
+    @GetMapping("/{jobId}/results")
+    @Operation(summary = "Вывод итогового результата распознавания инструментов")
+    public ResponseEntity<?> getResults(@PathVariable Long jobId) {
+        try {
+            return ResponseEntity.ok(comparsionService.getMergedResults(jobId));
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return ResponseEntity.badRequest().body(ex.getMessage());
+        }
+    }
+
+    @PostMapping("/{jobId}/status")
+    @Operation(summary = "Обновить статус Job")
+    public ResponseEntity<?> updateStatus(@PathVariable Long jobId, @RequestParam("jobStatus") JobStatus jobStatus) {
+        jobService.updateStatus(jobId, jobStatus);
+        return ResponseEntity.ok("ok");
+    }
+
+    @GetMapping("/{jobId}/status")
+    @Operation(summary = "Узнать текущий статус Job")
+    public ResponseEntity<?> getStatus(@PathVariable Long jobId) {
+        return ResponseEntity.ok(jobService.getJob(jobId).getStatus());
+    }
+
 }

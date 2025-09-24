@@ -1,8 +1,7 @@
 package com.lctproject.toolspredict.service.impl;
 
-import com.lctproject.toolspredict.model.Job;
-import com.lctproject.toolspredict.model.Order;
-import com.lctproject.toolspredict.model.ToolOrderItem;
+import com.lctproject.toolspredict.dto.JobStatus;
+import com.lctproject.toolspredict.model.*;
 import com.lctproject.toolspredict.repository.AccountingRepository;
 import com.lctproject.toolspredict.repository.PredictionResultRepository;
 import com.lctproject.toolspredict.repository.ToolOrderItemRepository;
@@ -15,8 +14,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -34,7 +33,11 @@ public class ComparsionServiceImpl implements ComparsionService {
     public ResponseEntity<?> compareResults(Job job) {
         Order order = accountingRepository.findByJob(job).getOrder();
         List<ToolOrderItem> orderedItems = toolOrderItemRepository.findByOrder(order);
-        List<Long> predictedToolList = getMergedToolList(job.getId()).stream().sorted().toList();
+        List<PredictionResult> results = getMergedResults(job.getId());
+        List<Long> predictedToolList = results.stream()
+                .map(pr -> pr.getTool().getId())
+                .toList();
+
         List<Long> orderedToolList = orderedItems.stream()
                 .map(item -> item.getTool().getId()).sorted()
                 .toList();
@@ -42,15 +45,16 @@ public class ComparsionServiceImpl implements ComparsionService {
         boolean isEqual = predictedToolList.equals(orderedToolList);
 
         if (isEqual) {
-            jobService.updateStatus(job.getId(), "FINISHED");
             return ResponseEntity.ok("Полное совпадение с заказанным набором.");
         } else {
-            jobService.updateStatus(job.getId(), "FAILED. MANUAL MAPPING IS REQUIRED");
+            jobService.updateStatus(job.getId(), JobStatus.MANUAL_MAPPING_IS_REQUIRED);
             return ResponseEntity.ok("Обнаружены расхождения. Требуется ручная разметка.");
         }
     }
 
-    private List<Long> getMergedToolList(Long jobId) {
+    @Override
+    @Deprecated
+    public List<Long> getMergedToolList(Long jobId) {
         return predictionResultRepository.findMaxToolCountPerJob(jobId).stream()
                 .flatMap(row -> {
                     Long toolId = ((Number) row[0]).longValue();
@@ -59,5 +63,52 @@ public class ComparsionServiceImpl implements ComparsionService {
                 })
                 .toList();
     }
+
+
+    public Map<Long, List<PredictionResult>> getPredictionResultsGroupedByOriginalFile(Job job) {
+        return predictionResultRepository.findAllByJobIdOrderByToolId(job.getId()).stream()
+                .collect(Collectors.groupingBy(
+                        pr -> pr.getPreprocessResult().getOriginalFile().getId(),
+                        LinkedHashMap::new,
+                        Collectors.collectingAndThen(
+                                Collectors.<PredictionResult>toList(),
+                                list -> list.stream()
+                                        .sorted(Comparator.comparing(pr -> pr.getTool().getId()))
+                                        .toList()
+                        )
+                ));
+    }
+
+    public List<PredictionResult> mergeByMaxOccurrences(Map<Long, List<PredictionResult>> groupedByOriginalFile) {
+        Map<Long, List<PredictionResult>> resultMap = new HashMap<>();
+
+        for (List<PredictionResult> list : groupedByOriginalFile.values()) {
+            log.info(String.valueOf(list));
+            Map<Long, List<PredictionResult>> groupedByTool = list.stream()
+                    .collect(Collectors.groupingBy(pr -> pr.getTool().getId()));
+
+            for (Map.Entry<Long, List<PredictionResult>> entry : groupedByTool.entrySet()) {
+                long toolId = entry.getKey();
+                List<PredictionResult> items = entry.getValue();
+
+                if (!resultMap.containsKey(toolId) || items.size() > resultMap.get(toolId).size()) {
+                    resultMap.put(toolId, items);
+                }
+            }
+        }
+        List<PredictionResult> finalResult = resultMap.values().stream()
+                .flatMap(List::stream)
+                .sorted(Comparator.comparing(pr -> pr.getTool().getId()))
+                .collect(Collectors.toList());
+
+        return finalResult;
+    }
+
+    @Override
+    public List<PredictionResult> getMergedResults(Long jobId) {
+        Map<Long, List<PredictionResult>> groupedByOriginalFile = getPredictionResultsGroupedByOriginalFile(jobService.getJob(jobId));
+        return mergeByMaxOccurrences(groupedByOriginalFile);
+    }
+
 
 }

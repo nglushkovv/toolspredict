@@ -35,7 +35,7 @@ public class FileController {
         }
     }
 
-    @DeleteMapping("/files/{fileId}")
+    @DeleteMapping("/{fileId}")
     @Operation(summary = "Удалить файл из MiniO")
     public ResponseEntity<?> deleteFile(@Parameter(description = "id_файла")
                            @PathVariable Long fileId) {
