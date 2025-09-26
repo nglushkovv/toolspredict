@@ -39,7 +39,8 @@ jobs:
             set -e
             cd /srv/aeroresnet/toolspredict
             git fetch origin develop
-            git reset --hard origin/develop
+            git merge --ff-only origin/develop
+
 
             SERVICES="${{ steps.detect.outputs.services }}"
             if [ -z "$SERVICES" ]; then
