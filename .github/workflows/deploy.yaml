@@ -13,12 +13,13 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Detect changed services
         id: detect
         run: |
           CHANGED=""
-          git fetch origin develop
           DIFF=$(git diff --name-only origin/develop...HEAD)
           echo "$DIFF"
 
@@ -41,7 +42,7 @@ jobs:
 
             export GIT_SSH_COMMAND='ssh -i ~/.ssh/github_deploy -o StrictHostKeyChecking=no'
             git fetch origin develop
-            git merge --ff-only origin/develop
+            git reset --hard origin/develop
 
             SERVICES="${{ steps.detect.outputs.services }}"
             if [ -z "$SERVICES" ]; then
