@@ -33,12 +33,4 @@ public class ToolController {
         return ResponseEntity.ok(toolService.getAllTools());
     }
 
-    @CrossOrigin
-    @PostMapping("/test")
-    @Operation(summary = "Вывести все инструменты")
-    public ResponseEntity<?> test() {
-        return ResponseEntity.ok(toolService.getAllTools());
-    }
-
-
 }
