@@ -70,12 +70,12 @@ services:
     ports:
       - "${INFERENCE_PORT:-8002}:8002"
   frontend:
-    build:
-      context: ./frontend
-      args:
-        VITE_API_BASE_URL: /api/v1
-    ports:
-      - "${FRONTEND_PORT:-8088}:80"
+      build:
+        context: ./frontend
+      ports:
+        - "${FRONTEND_PORT:-8088}:80"
+      depends_on:
+        - spring-service
 
 volumes:
   pgdata:
