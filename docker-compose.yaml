@@ -49,6 +49,9 @@ services:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT}
       - MINIO_ROOT_USER=${MINIO_ROOT_USER}
       - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - MINIO_BUCKET_RAW=bucket-raw
+      - MINIO_BUCKET_PROCESSED=bucket-processed
+      - MINIO_BUCKET_RESULTS=bucket-results
       - PORT=${PREPROCESS_PORT:-8001}
     ports:
       - "${PREPROCESS_PORT:-8001}:8001"
@@ -60,6 +63,9 @@ services:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT}
       - MINIO_ROOT_USER=${MINIO_ROOT_USER}
       - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - MINIO_BUCKET_RAW=bucket-raw
+      - MINIO_BUCKET_PROCESSED=bucket-processed
+      - MINIO_BUCKET_RESULTS=bucket-results
       - PORT=${INFERENCE_PORT:-8002}
     ports:
       - "${INFERENCE_PORT:-8002}:8002"
