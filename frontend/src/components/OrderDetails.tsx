@@ -18,6 +18,7 @@ interface OrderItem {
   toolName: string;
   toolReference: string;
   toolId: number;
+  marking?: string; // маркировка инструмента
 }
 
 // No mock data - will load from API
@@ -40,7 +41,8 @@ export const OrderDetails = ({ order, actionType, onBack, onNext }: OrderDetails
           id: apiOrderTool.id,
           toolName: apiOrderTool.tool.name,
           toolReference: apiOrderTool.tool.toolReference.toolName,
-          toolId: apiOrderTool.tool.id
+          toolId: apiOrderTool.tool.id,
+          marking: apiOrderTool.marking // маркировка из заказа
         })) || [];
         
         setOrderItems(transformedItems);
@@ -143,6 +145,11 @@ export const OrderDetails = ({ order, actionType, onBack, onNext }: OrderDetails
                     <div>
                       <p className="font-medium">{item.toolName}</p>
                       <p className="text-sm text-muted-foreground">Тип: {item.toolReference}</p>
+                      {item.marking && (
+                        <p className="text-sm text-muted-foreground">
+                          Маркировка: <span className="font-medium text-primary">{item.marking}</span>
+                        </p>
+                      )}
                     </div>
                     <Badge variant="outline">ID: {item.toolId}</Badge>
                   </div>

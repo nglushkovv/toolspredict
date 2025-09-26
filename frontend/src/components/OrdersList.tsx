@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +21,9 @@ interface OrdersListProps {
   onRequestOrders: () => void;
   orders: Order[];
   loading?: boolean;
+  loadingMore?: boolean;
+  hasMore?: boolean;
+  onLoadMore?: () => void;
 }
 
 
@@ -37,7 +40,22 @@ const getStatusBadge = (status: Order["status"]) => {
   }
 };
 
-export const OrdersList = ({ onIssue, onReturn, onRequestOrders, orders, loading = false }: OrdersListProps) => {
+export const OrdersList = ({ onIssue, onReturn, onRequestOrders, orders, loading = false, loadingMore = false, hasMore = false, onLoadMore }: OrdersListProps) => {
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!hasMore || !onLoadMore) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver((entries) => {
+      const entry = entries[0];
+      if (entry.isIntersecting && !loadingMore) {
+        onLoadMore();
+      }
+    }, { rootMargin: '200px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasMore, onLoadMore, loadingMore, orders.length]);
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -144,6 +162,16 @@ export const OrdersList = ({ onIssue, onReturn, onRequestOrders, orders, loading
               </CardContent>
             </Card>
           ))
+        )}
+        {hasMore && (
+          <div ref={sentinelRef} className="flex items-center justify-center py-6">
+            {loadingMore && (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                <span className="text-sm text-muted-foreground">Загрузка...</span>
+              </>
+            )}
+          </div>
         )}
       </div>
     </div>

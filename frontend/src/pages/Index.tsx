@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { OrdersList, Order } from "@/components/OrdersList";
 import { OrderDetails } from "@/components/OrderDetails";
 import { FileUpload } from "@/components/FileUpload";
@@ -38,9 +38,15 @@ const Index = () => {
 
   const selectedOrder = orders.find(order => order.id === selectedOrderId);
 
+  // paging state
+  const [page, setPage] = useState(0);
+  const [pageSize] = useState(10);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+
   // Load orders on component mount
   useEffect(() => {
-    loadOrders();
+    loadOrders(0, false);
   }, []);
 
   // Restore view state from localStorage
@@ -70,10 +76,10 @@ const Index = () => {
     } catch {}
   }, [currentView, selectedOrderId, actionType, jobData]);
 
-  const loadOrders = async () => {
+  const loadOrders = async (targetPage = 0, append = false) => {
     try {
-      setLoading(true);
-      const apiOrders = await apiService.getOrders();
+      if (append) setLoadingMore(true); else setLoading(true);
+      const apiOrders = await apiService.getOrders(targetPage, pageSize);
       console.log('Loaded orders from API:', apiOrders);
       
       // Transform API response to match our Order interface
@@ -123,7 +129,15 @@ const Index = () => {
       );
       
       console.log('Transformed orders with tools count:', transformedOrders);
-      setOrders(transformedOrders);
+      if (append) {
+        const existingIds = new Set(orders.map(o => o.id));
+        const toAdd = transformedOrders.filter(o => !existingIds.has(o.id));
+        setOrders(prev => [...prev, ...toAdd]);
+      } else {
+        setOrders(transformedOrders);
+      }
+      setPage(targetPage);
+      setHasMore(apiOrders.length === pageSize);
     } catch (error) {
       console.error('Failed to load orders:', error);
       setOrders([]); // No fallback to mock data
@@ -149,9 +163,14 @@ const Index = () => {
         variant: "destructive",
       });
     } finally {
-      setLoading(false);
+      if (append) setLoadingMore(false); else setLoading(false);
     }
   };
+
+  const handleLoadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    await loadOrders(page + 1, true);
+  }, [loadingMore, hasMore, page, pageSize, orders]);
 
   const handleIssueOrder = (orderId: string) => {
     setSelectedOrderId(orderId);
@@ -331,6 +350,9 @@ const Index = () => {
             onRequestOrders={handleRequestOrders}
             orders={orders}
             loading={loading}
+            loadingMore={loadingMore}
+            hasMore={hasMore}
+            onLoadMore={handleLoadMore}
           />
         );
 

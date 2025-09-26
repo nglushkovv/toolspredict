@@ -1,75 +1,76 @@
 services:
-    postgres:
-        container_name: postgresql
-        image: postgres:latest
-        environment: 
-           - POSTGRES_DB=aerodb
-           - POSTGRES_PASSWORD=postgres
-           - POSTGRES_USER=postgres
-        ports:
-           - 5454:5432
-        volumes:
-           - pgdata:/var/lib/postgresql/data
-    kafka:
-        container_name: kafka
-        image: apache/kafka-native:4.0.0
-        ports:
-          - '9092:9092'   
-          - '29092:29092'
-        environment:
-          KAFKA_PROCESS_ROLES: broker,controller
-          KAFKA_NODE_ID: 1
-          KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
-          KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-          KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
-          KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,EXTERNAL://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093
-          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:29092,CONTROLLER://kafka:9093
-          KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-          KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-          KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-        networks:
-          - kafka-net
-    minio:
-        image: minio/minio
-        environment:
-          MINIO_ROOT_USER: minioadmin
-          MINIO_ROOT_PASSWORD: minioadmin
-          MINIO_NOTIFY_KAFKA_ENABLE_1: "on"
-          MINIO_NOTIFY_KAFKA_BROKERS_1: "kafka:9092"
-          MINIO_NOTIFY_KAFKA_TOPIC_1: "raw-media-metadata"
-          MINIO_NOTIFY_KAFKA_ENABLE_2: "on"  
-          MINIO_NOTIFY_KAFKA_BROKERS_2: "kafka:9092"
-          MINIO_NOTIFY_KAFKA_TOPIC_2: "processed-media-metadata"
-        command: server /data --console-address ':9001'
-        ports:
-          - '9000:9000'
-          - '9001:9001'
-        volumes:
-          - minio_data:/data
-        networks:
-          - kafka-net
-    clickhouse:
-        image: clickhouse/clickhouse-server:23.8
-        container_name: clickhouse
-        ports:
-          - "8123:8123" # HTTP-интерфейс (REST/ClickHouse UI)
-          - "9090:9000" # TCP (для JDBC/клиентов)
-          - "9009:9009" # gRPC (необязательно)
-        volumes:
-          - clickhouse_data:/var/lib/clickhouse
-          - ./clickhouse_config/users.d:/etc/clickhouse-server/users.d
-        ulimits:
-            nofile:
-              soft: 262144
-              hard: 262144
-        networks:
-          - kafka-net
+  postgres:
+    image: postgres:latest
+    container_name: postgresql
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-aerodb}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "5454:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  minio:
+    image: minio/minio
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin}
+    command: server /data --console-address ':9001'
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  spring-service:
+    build: ./spring-service
+    container_name: spring-service
+    environment:
+      - POSTGRES_URL=${POSTGRES_URL}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT}
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - PREPROCESS_SERVICE_URL=${PREPROCESS_SERVICE_URL}
+      - INFERENCE_SERVICE_URL=${INFERENCE_SERVICE_URL}
+      - PORT=${SPRING_PORT:-8087}
+    ports:
+      - "${SPRING_PORT:-8087}:8080"
+    depends_on:
+      - postgres
+      - minio
+
+  preprocess-service:
+    build: ./preprocess-service
+    container_name: preprocess-service
+    environment:
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT}
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - PORT=${PREPROCESS_PORT:-8001}
+    ports:
+      - "${PREPROCESS_PORT:-8001}:8001"
+
+  inference-service:
+    build: ./inference-service
+    container_name: inference-service
+    environment:
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT}
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - PORT=${INFERENCE_PORT:-8002}
+    ports:
+      - "${INFERENCE_PORT:-8002}:8002"
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: /api/v1
+    ports:
+      - "${FRONTEND_PORT:-8088}:80"
+
 volumes:
-   clickhouse_data:
-   minio_data:
-   pgdata:
-   
-networks:
-  kafka-net:
-    driver: bridge
+  pgdata:
+  minio_data:

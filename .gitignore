@@ -23,3 +23,8 @@
 /backend/nbdist/
 /backend/.nb-gradle/
 /backend/.vscode/
+
+/inference-service/venv/
+/preprocess-service/venv/
+venv/
+.env

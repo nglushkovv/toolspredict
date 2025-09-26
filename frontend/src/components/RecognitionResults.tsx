@@ -25,6 +25,9 @@ interface RecognitionItem {
   found: number;
   status: "found" | "not_found" | "not_expected";
   confidence?: number; // 0-100
+  marking?: string; // маркировка инструмента
+  orderedMarking?: string; // маркировка из заказа (для сравнения)
+  markingStatus?: "match" | "mismatch" | "not_specified" | "not_recognized"; // статус соответствия маркировки
 }
 
 interface RecognitionResultsProps {
@@ -68,37 +71,98 @@ export const RecognitionResults = ({ orderNumber, orderId, actionType, jobId, on
         orderTools.map((ot: any) => ot.tool?.id ?? ot.toolId)
       );
 
-      // Build map for recognized by toolId
+      // Build map for recognized by toolId - use array to handle duplicates
       const recognizedItems = Array.isArray(recognized) ? recognized : [];
-      const recognizedByToolId = new Map<number, any>();
+      const recognizedByToolId = new Map<number, any[]>();
       recognizedItems.forEach((r: any) => {
         const tid = r.tool?.id;
-        if (typeof tid === 'number') recognizedByToolId.set(tid, r);
+        if (typeof tid === 'number') {
+          if (!recognizedByToolId.has(tid)) {
+            recognizedByToolId.set(tid, []);
+          }
+          recognizedByToolId.get(tid)!.push(r);
+        }
       });
 
       const items: RecognitionItem[] = [];
+      const usedRecognitions = new Set<number>(); // Track which recognition results we've used
 
       // 1) Items that were ordered: mark found/not_found
       orderTools.forEach((ot: any, idx: number) => {
         const tool = ot.tool;
         const rid = tool?.id;
-        const recog = rid != null ? recognizedByToolId.get(rid) : undefined;
-        const confidence = typeof recog?.confidence === 'number' ? Math.round(recog.confidence * 100) : undefined;
+        const orderedMarking = ot.marking; // маркировка из заказа
+        const recognizedArray = rid != null ? recognizedByToolId.get(rid) : [];
+        
+        // Find the best recognition result with priority: matching marking > highest confidence
+        let bestRecognition = null;
+        let bestRecognitionIndex = -1;
+        let bestScore = -1;
+        let markingStatus: "match" | "mismatch" | "not_specified" | "not_recognized" = "not_specified";
+        
+        if (recognizedArray && recognizedArray.length > 0) {
+          recognizedArray.forEach((recog: any, recogIdx: number) => {
+            const confidence = typeof recog.confidence === 'number' ? recog.confidence : 0;
+            const recogMarking = recog.marking;
+            
+            // Calculate score: priority for matching markings
+            let score = confidence;
+            
+            // If ordered marking is specified, prioritize matching markings
+            if (orderedMarking && orderedMarking.trim()) {
+              if (recogMarking && recogMarking.trim() === orderedMarking.trim()) {
+                score += 1000; // High priority for matching markings
+                markingStatus = "match";
+              } else if (recogMarking && recogMarking.trim()) {
+                score += 500; // Medium priority for any marking vs no marking
+                markingStatus = "mismatch";
+              } else {
+                // No marking recognized but ordered marking exists
+                markingStatus = "not_recognized";
+              }
+            }
+            
+            if (score > bestScore) {
+              bestScore = score;
+              bestRecognition = recog;
+              bestRecognitionIndex = recogIdx;
+            }
+          });
+        }
+        
+        const confidence = bestRecognition ? Math.round(bestRecognition.confidence * 100) : undefined;
+        const found = bestRecognition ? 1 : 0;
+        const recogMarking = bestRecognition?.marking;
+        
+        // Determine final status - упрощенная логика
+        let status: "found" | "not_found" | "not_expected" = found ? 'found' : 'not_found';
+        
+        // Mark this recognition as used
+        if (bestRecognition && bestRecognitionIndex >= 0) {
+          const globalIndex = recognizedItems.findIndex((r: any) => r === recognizedArray[bestRecognitionIndex]);
+          if (globalIndex >= 0) {
+            usedRecognitions.add(globalIndex);
+          }
+        }
+        
         items.push({
           id: String(ot.id ?? `ord-${idx}`),
           name: tool?.name ?? tool?.toolReference?.toolName ?? `Инструмент ${idx + 1}`,
           partNumber: tool?.partNumber ?? '',
           required: 1,
-          found: recog ? 1 : 0,
-          status: recog ? 'found' : 'not_found',
+          found,
+          status,
           confidence,
+          marking: recogMarking,
+          orderedMarking: orderedMarking,
+          markingStatus: markingStatus,
         });
       });
 
-      // 2) Items recognized but not ordered: not_expected
+      // 2) Items recognized but not ordered, or excess duplicates: not_expected
       recognizedItems.forEach((r: any, idx: number) => {
         const tid = r.tool?.id;
-        if (typeof tid === 'number' && !orderedToolIds.has(tid)) {
+        if (typeof tid === 'number' && !usedRecognitions.has(idx)) {
           items.push({
             id: String(r.id ?? `rec-${idx}`),
             name: r.tool?.name ?? r.toolReference?.toolName ?? `Распознанный инструмент ${idx + 1}`,
@@ -107,6 +171,8 @@ export const RecognitionResults = ({ orderNumber, orderId, actionType, jobId, on
             found: 1,
             status: 'not_expected',
             confidence: typeof r.confidence === 'number' ? Math.round(r.confidence * 100) : undefined,
+            marking: r.marking,
+            markingStatus: "not_specified",
           });
         }
       });
@@ -270,6 +336,29 @@ export const RecognitionResults = ({ orderNumber, orderId, actionType, jobId, on
                     <div>
                       <p className="font-medium">{item.name}</p>
                       <p className="text-sm text-muted-foreground">Номер: {item.partNumber}</p>
+                      {/* Показываем маркировки только если они есть */}
+                      {item.orderedMarking && (
+                        <p className="text-sm text-muted-foreground">
+                          Заказанная маркировка: <span className="font-medium">{item.orderedMarking}</span>
+                        </p>
+                      )}
+                      {item.orderedMarking && (
+                        <p className="text-sm text-muted-foreground">
+                          Найденная маркировка: {
+                            item.marking ? (
+                              <>
+                                <span className={`font-medium ${item.markingStatus === "match" ? "text-success" : "text-orange-500"}`}>
+                                  {item.marking}
+                                </span>
+                                {item.markingStatus === "match" && <span className="text-success ml-2">✓</span>}
+                                {item.markingStatus === "mismatch" && <span className="text-orange-500 ml-2">⚠</span>}
+                              </>
+                            ) : (
+                              <span className="text-orange-500 font-medium">Не распознана</span>
+                            )
+                          }
+                        </p>
+                      )}
                       <div className="flex items-center space-x-2">
                         <p className="text-xs text-muted-foreground">{getStatusDescription(item.status)}</p>
                         {item.confidence && (

@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:8080/api/v1';
+const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || '/api/v1';
 
 export class ApiError extends Error {
   constructor(
@@ -180,7 +180,7 @@ class ApiService {
 
   // Jobs
   async getJobs(query?: string, page = 0, size = 10): Promise<ApiJob[]> {
-    const url = new URL(`${API_BASE_URL}/jobs`);
+    const url = new URL(`${API_BASE_URL}/jobs`, window.location.origin);
     if (query) url.searchParams.set('query', query);
     url.searchParams.set('page', page.toString());
     url.searchParams.set('size', size.toString());
@@ -292,7 +292,7 @@ class ApiService {
   }
 
   async updateJobStatus(jobId: number, jobStatus: 'STARTED' | 'PREPROCESS' | 'FINISHED' | 'MANUAL_MAPPING_IS_REQUIRED' | 'VALIDATION') {
-    const url = new URL(`${API_BASE_URL}/jobs/${jobId}/status`);
+    const url = new URL(`${API_BASE_URL}/jobs/${jobId}/status`, window.location.origin);
     url.searchParams.set('jobStatus', jobStatus);
     const response = await this.makeRequest(url.toString(), { method: 'POST' });
     return response.json();
