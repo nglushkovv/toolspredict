@@ -38,9 +38,10 @@ jobs:
           script: |
             set -e
             cd /srv/aeroresnet/toolspredict
+
+            export GIT_SSH_COMMAND='ssh -i ~/.ssh/github_deploy -o StrictHostKeyChecking=no'
             git fetch origin develop
             git merge --ff-only origin/develop
-
 
             SERVICES="${{ steps.detect.outputs.services }}"
             if [ -z "$SERVICES" ]; then
