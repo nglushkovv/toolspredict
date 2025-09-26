@@ -1,0 +1,51 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - develop
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Detect changed services
+        id: detect
+        run: |
+          CHANGED=""
+          git fetch origin develop
+          DIFF=$(git diff --name-only origin/develop...HEAD)
+          echo "$DIFF"
+
+          if echo "$DIFF" | grep -qE '^frontend/'; then CHANGED="$CHANGED frontend"; fi
+          if echo "$DIFF" | grep -qE '^spring-service/'; then CHANGED="$CHANGED spring-service"; fi
+          if echo "$DIFF" | grep -qE '^preprocess-service/'; then CHANGED="$CHANGED preprocess-service"; fi
+          if echo "$DIFF" | grep -qE '^inference-service/'; then CHANGED="$CHANGED inference-service"; fi
+
+          echo "services=$(echo $CHANGED | xargs)" >> $GITHUB_OUTPUT
+
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v0.1.9
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            set -e
+            cd /srv/aeroresnet/toolspredict
+            git fetch origin develop
+            git reset --hard origin/develop
+
+            SERVICES="${{ steps.detect.outputs.services }}"
+            if [ -z "$SERVICES" ]; then
+              echo "No changed services -> skipping."
+              exit 0
+            fi
+
+            echo "Building and restarting: $SERVICES"
+            docker compose -p aeroresnet build $SERVICES
+            docker compose -p aeroresnet up -d $SERVICES
