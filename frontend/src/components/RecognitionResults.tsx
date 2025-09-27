@@ -2,9 +2,10 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, CheckCircle, XCircle, AlertCircle, Package } from "lucide-react";
+import { ArrowLeft, CheckCircle, XCircle, AlertCircle, Package, ChevronDown, ChevronUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiService } from "@/lib/api";
+import { apiService, ApiRecognitionResultDetailed } from "@/lib/api";
+import { ImageWithBbox } from "./ImageWithBbox";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,6 +17,11 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 interface RecognitionItem {
   id: string;
@@ -28,6 +34,10 @@ interface RecognitionItem {
   marking?: string; // маркировка инструмента
   orderedMarking?: string; // маркировка из заказа (для сравнения)
   markingStatus?: "match" | "mismatch" | "not_specified" | "not_recognized"; // статус соответствия маркировки
+  // New fields for image display
+  originalImageId?: number;
+  preprocessFileId?: number;
+  detailedResult?: ApiRecognitionResultDetailed;
 }
 
 interface RecognitionResultsProps {
@@ -46,6 +56,7 @@ export const RecognitionResults = ({ orderNumber, orderId, actionType, jobId, on
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   
   const actionTitle = actionType === "issue" ? "Выдача инструментария" : "Сдача инструментария";
   
@@ -62,9 +73,9 @@ export const RecognitionResults = ({ orderNumber, orderId, actionType, jobId, on
   const loadResults = async () => {
     try {
       setLoading(true);
-      const [orderTools, recognized] = await Promise.all([
+      const [orderTools, detailedResults] = await Promise.all([
         apiService.getOrderTools(orderId), // returns ApiOrderTool[]
-        apiService.getResults(jobId),      // array
+        apiService.getDetailedResults(jobId), // returns ApiRecognitionResultDetailed[]
       ]);
 
       const orderedToolIds = new Set<number>(
@@ -72,9 +83,9 @@ export const RecognitionResults = ({ orderNumber, orderId, actionType, jobId, on
       );
 
       // Build map for recognized by toolId - use array to handle duplicates
-      const recognizedItems = Array.isArray(recognized) ? recognized : [];
-      const recognizedByToolId = new Map<number, any[]>();
-      recognizedItems.forEach((r: any) => {
+      const recognizedItems = Array.isArray(detailedResults) ? detailedResults : [];
+      const recognizedByToolId = new Map<number, ApiRecognitionResultDetailed[]>();
+      recognizedItems.forEach((r: ApiRecognitionResultDetailed) => {
         const tid = r.tool?.id;
         if (typeof tid === 'number') {
           if (!recognizedByToolId.has(tid)) {
@@ -101,7 +112,7 @@ export const RecognitionResults = ({ orderNumber, orderId, actionType, jobId, on
         let markingStatus: "match" | "mismatch" | "not_specified" | "not_recognized" = "not_specified";
         
         if (recognizedArray && recognizedArray.length > 0) {
-          recognizedArray.forEach((recog: any, recogIdx: number) => {
+          recognizedArray.forEach((recog: ApiRecognitionResultDetailed, recogIdx: number) => {
             const confidence = typeof recog.confidence === 'number' ? recog.confidence : 0;
             const recogMarking = recog.marking;
             
@@ -156,16 +167,20 @@ export const RecognitionResults = ({ orderNumber, orderId, actionType, jobId, on
           marking: recogMarking,
           orderedMarking: orderedMarking,
           markingStatus: markingStatus,
+          // Add image data if available
+          originalImageId: bestRecognition?.preprocessResult?.originalFile?.id,
+          preprocessFileId: bestRecognition?.preprocessResult?.file?.id,
+          detailedResult: bestRecognition,
         });
       });
 
       // 2) Items recognized but not ordered, or excess duplicates: not_expected
-      recognizedItems.forEach((r: any, idx: number) => {
+      recognizedItems.forEach((r: ApiRecognitionResultDetailed, idx: number) => {
         const tid = r.tool?.id;
         if (typeof tid === 'number' && !usedRecognitions.has(idx)) {
           items.push({
             id: String(r.id ?? `rec-${idx}`),
-            name: r.tool?.name ?? r.toolReference?.toolName ?? `Распознанный инструмент ${idx + 1}`,
+            name: r.tool?.name ?? r.tool?.toolReference?.toolName ?? `Распознанный инструмент ${idx + 1}`,
             partNumber: r.tool?.partNumber ?? '',
             required: 0,
             found: 1,
@@ -173,6 +188,10 @@ export const RecognitionResults = ({ orderNumber, orderId, actionType, jobId, on
             confidence: typeof r.confidence === 'number' ? Math.round(r.confidence * 100) : undefined,
             marking: r.marking,
             markingStatus: "not_specified",
+            // Add image data
+            originalImageId: r.preprocessResult?.originalFile?.id,
+            preprocessFileId: r.preprocessResult?.file?.id,
+            detailedResult: r,
           });
         }
       });
@@ -196,6 +215,16 @@ export const RecognitionResults = ({ orderNumber, orderId, actionType, jobId, on
     } else {
       setConfirmOpen(true);
     }
+  };
+
+  const toggleExpanded = (itemId: string) => {
+    const newExpanded = new Set(expandedItems);
+    if (newExpanded.has(itemId)) {
+      newExpanded.delete(itemId);
+    } else {
+      newExpanded.add(itemId);
+    }
+    setExpandedItems(newExpanded);
   };
 
   const getStatusIcon = (status: RecognitionItem["status"]) => {
@@ -329,48 +358,114 @@ export const RecognitionResults = ({ orderNumber, orderId, actionType, jobId, on
               </div>
             ) : (
               <div className="space-y-3">
-                {results.map((item) => (
-                <div key={item.id} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    {getStatusIcon(item.status)}
-                    <div>
-                      <p className="font-medium">{item.name}</p>
-                      <p className="text-sm text-muted-foreground">Номер: {item.partNumber}</p>
-                      {/* Показываем маркировки только если они есть */}
-                      {item.orderedMarking && (
-                        <p className="text-sm text-muted-foreground">
-                          Заказанная маркировка: <span className="font-medium">{item.orderedMarking}</span>
-                        </p>
-                      )}
-                      {item.orderedMarking && (
-                        <p className="text-sm text-muted-foreground">
-                          Найденная маркировка: {
-                            item.marking ? (
-                              <>
-                                <span className={`font-medium ${item.markingStatus === "match" ? "text-success" : "text-orange-500"}`}>
-                                  {item.marking}
-                                </span>
-                                {item.markingStatus === "match" && <span className="text-success ml-2">✓</span>}
-                                {item.markingStatus === "mismatch" && <span className="text-orange-500 ml-2">⚠</span>}
-                              </>
-                            ) : (
-                              <span className="text-orange-500 font-medium">Не распознана</span>
-                            )
-                          }
-                        </p>
-                      )}
-                      <div className="flex items-center space-x-2">
-                        <p className="text-xs text-muted-foreground">{getStatusDescription(item.status)}</p>
-                        {item.confidence && (
-                          <p className="text-xs text-muted-foreground">• Уверенность: {item.confidence}%</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                {results.map((item) => {
+                  // Only show expandable content for found or not_expected items
+                  const shouldShowImage = item.status === "found" || item.status === "not_expected";
                   
-                  {getStatusBadge(item)}
-                </div>
-                ))}
+                  if (shouldShowImage) {
+                    return (
+                      <Collapsible key={item.id} open={expandedItems.has(item.id)} onOpenChange={() => toggleExpanded(item.id)}>
+                        <div className="border rounded-lg">
+                          <CollapsibleTrigger asChild>
+                            <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/50 transition-colors">
+                              <div className="flex items-center space-x-3">
+                                {getStatusIcon(item.status)}
+                                <div>
+                                  <p className="font-medium">{item.name}</p>
+                                  <p className="text-sm text-muted-foreground">Номер: {item.partNumber}</p>
+                                  {/* Показываем маркировки только если они есть */}
+                                  {item.orderedMarking && (
+                                    <p className="text-sm text-muted-foreground">
+                                      Заказанная маркировка: <span className="font-medium">{item.orderedMarking}</span>
+                                    </p>
+                                  )}
+                                  {item.orderedMarking && (
+                                    <p className="text-sm text-muted-foreground">
+                                      Найденная маркировка: {
+                                        item.marking ? (
+                                          <>
+                                            <span className={`font-medium ${item.markingStatus === "match" ? "text-success" : "text-orange-500"}`}>
+                                              {item.marking}
+                                            </span>
+                                            {item.markingStatus === "match" && <span className="text-success ml-2">✓</span>}
+                                            {item.markingStatus === "mismatch" && <span className="text-orange-500 ml-2">⚠</span>}
+                                          </>
+                                        ) : (
+                                          <span className="text-orange-500 font-medium">Не распознана</span>
+                                        )
+                                      }
+                                    </p>
+                                  )}
+                                  <div className="flex items-center space-x-2">
+                                    <p className="text-xs text-muted-foreground">{getStatusDescription(item.status)}</p>
+                                    {item.confidence && (
+                                      <p className="text-xs text-muted-foreground">• Уверенность: {item.confidence}%</p>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-center space-x-2">
+                                {getStatusBadge(item)}
+                                {expandedItems.has(item.id) ? (
+                                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                                ) : (
+                                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                )}
+                              </div>
+                            </div>
+                          </CollapsibleTrigger>
+                          
+                          <CollapsibleContent>
+                            <div className="px-4 pb-4 border-t bg-muted/20">
+                              {item.originalImageId && (
+                                <div className="mt-4">
+                                  <ImageWithBbox
+                                    originalImageId={item.originalImageId}
+                                    preprocessFileId={item.preprocessFileId || null}
+                                    toolName={item.name}
+                                    confidence={item.detailedResult?.confidence || 0}
+                                    className="w-full"
+                                  />
+                                </div>
+                              )}
+                              {!item.originalImageId && (
+                                <div className="mt-4 p-4 text-center text-muted-foreground">
+                                  <AlertCircle className="h-8 w-8 mx-auto mb-2" />
+                                  <p>Изображение недоступно</p>
+                                </div>
+                              )}
+                            </div>
+                          </CollapsibleContent>
+                        </div>
+                      </Collapsible>
+                    );
+                  } else {
+                    // For not_found items, show simple non-expandable card
+                    return (
+                      <div key={item.id} className="flex items-center justify-between p-4 border rounded-lg">
+                        <div className="flex items-center space-x-3">
+                          {getStatusIcon(item.status)}
+                          <div>
+                            <p className="font-medium">{item.name}</p>
+                            <p className="text-sm text-muted-foreground">Номер: {item.partNumber}</p>
+                            {/* Показываем маркировки только если они есть */}
+                            {item.orderedMarking && (
+                              <p className="text-sm text-muted-foreground">
+                                Заказанная маркировка: <span className="font-medium">{item.orderedMarking}</span>
+                              </p>
+                            )}
+                            <div className="flex items-center space-x-2">
+                              <p className="text-xs text-muted-foreground">{getStatusDescription(item.status)}</p>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {getStatusBadge(item)}
+                      </div>
+                    );
+                  }
+                })}
               </div>
             )}
           </CardContent>

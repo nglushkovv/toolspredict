@@ -123,6 +123,36 @@ export interface ApiRecognitionResult {
   confidence?: number;
 }
 
+// New interfaces for recognition results with image data
+export interface ApiRecognitionResultDetailed {
+  id: number;
+  job: ApiJobInfo;
+  tool: ApiTool;
+  file: ApiFileInfo | null;
+  preprocessResult: {
+    id: number;
+    job: ApiJobInfo;
+    toolReference: ApiToolReference | null;
+    file: ApiFileInfo | null;
+    originalFile: ApiFileInfo;
+    confidence: number | null;
+    createdAt: string;
+  };
+  confidence: number;
+  createdAt: string;
+  marking: string | null;
+}
+
+export interface ApiPreprocessData {
+  source_image_key: string;
+  object_key: string;
+  class_id: number;
+  macro_class: string;
+  confidence: number;
+  bbox: [number, number, number, number]; // [x1, y1, x2, y2]
+  timestamp: string;
+}
+
 class ApiService {
   private async makeRequest(url: string, options: RequestInit = {}): Promise<Response> {
     const response = await fetch(url, {
@@ -307,6 +337,26 @@ class ApiService {
   async getTool(toolId: number) {
     const response = await fetch(`${API_BASE_URL}/tools/${toolId}`);
     if (!response.ok) throw new Error('Failed to fetch tool');
+    return response.json();
+  }
+
+  // MinIO methods for image and data retrieval using existing file endpoints
+  async getFileFromMinIO(fileId: number): Promise<string> {
+    // Use existing endpoint to get file from MinIO by ID
+    const response = await this.makeRequest(`${API_BASE_URL}/files/${fileId}`);
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
+  }
+
+  async getPreprocessDataFromMinIO(fileId: number): Promise<ApiPreprocessData> {
+    // Get preprocess JSON data from MinIO using file ID
+    const response = await this.makeRequest(`${API_BASE_URL}/files/${fileId}`);
+    return response.json();
+  }
+
+  // Enhanced results method that returns detailed data
+  async getDetailedResults(jobId: number): Promise<ApiRecognitionResultDetailed[]> {
+    const response = await this.makeRequest(`${API_BASE_URL}/jobs/${jobId}/results`);
     return response.json();
   }
 }
