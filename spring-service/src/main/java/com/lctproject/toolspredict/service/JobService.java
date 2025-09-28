@@ -26,4 +26,6 @@ public interface JobService {
     List<PreprocessResult> getPreprocessResults(Long jobId);
 
     List<PredictionResult> getPredictionResults(Long jobId);
+
+    Job createTestJob();
 }

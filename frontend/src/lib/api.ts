@@ -252,6 +252,11 @@ class ApiService {
       // Специфичные сообщения для разных статусов при загрузке файлов
       switch (response.status) {
         case 400:
+          // Проверяем, является ли это ошибкой превышения лимита файлов
+          if (errorText.includes('Превышен лимит файлов для Job') || 
+              errorText.includes('Чтобы добавить новый файл, удалите предыдущие')) {
+            throw new ApiError('Превышен лимит файлов для Job. Чтобы добавить новый файл, удалите предыдущие.', 400, errorText);
+          }
           throw new ApiError(`Сервис распознавания недоступен: ${errorText}`, 400, errorText);
         case 422:
           throw new ApiError(`Не удалось распознать инструменты на фото: ${errorText}`, 422, errorText);
@@ -358,6 +363,54 @@ class ApiService {
   async getDetailedResults(jobId: number): Promise<ApiRecognitionResultDetailed[]> {
     const response = await this.makeRequest(`${API_BASE_URL}/jobs/${jobId}/results`);
     return response.json();
+  }
+
+  // Test model method for uploading archive and creating TEST job
+  async testModel(file: File): Promise<{ jobId: number }> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${API_BASE_URL}/test/model`, {
+      method: 'POST',
+      body: formData,
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unknown error');
+      
+      // Специфичные сообщения для разных статусов при загрузке архива
+      switch (response.status) {
+        case 400:
+          throw new ApiError(`Сервис тестирования недоступен: ${errorText}`, 400, errorText);
+        case 422:
+          throw new ApiError(`Не удалось обработать архив: ${errorText}`, 422, errorText);
+        case 404:
+          throw new ApiError(`Сервис тестирования не найден: ${errorText}`, 404, errorText);
+        case 413:
+          throw new ApiError(`Архив слишком большой: ${errorText}`, 413, errorText);
+        case 415:
+          throw new ApiError(`Неподдерживаемый формат архива. Выберите ZIP архив: ${errorText}`, 415, errorText);
+        case 500:
+          throw new ApiError(`Внутренняя ошибка сервера: ${errorText}`, 500, errorText);
+        default:
+          throw new ApiError(`HTTP ${response.status}: ${errorText}`, response.status, errorText);
+      }
+    }
+    
+    const result = await response.json();
+    console.log('testModel API response:', result);
+    
+    // Сервер возвращает просто число (jobId), а не объект
+    let jobId: number;
+    if (typeof result === 'number') {
+      jobId = result;
+    } else if (result && typeof result.jobId === 'number') {
+      jobId = result.jobId;
+    } else {
+      throw new ApiError('Неверный формат ответа от сервера: ожидается число (jobId)', 500);
+    }
+    
+    return { jobId };
   }
 }
 

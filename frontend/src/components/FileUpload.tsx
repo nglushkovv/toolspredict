@@ -283,7 +283,12 @@ export const FileUpload = ({ orderNumber, actionType, jobId, onBack, onNext }: F
       if (error instanceof ApiError) {
         switch (error.status) {
           case 400:
-            errorMessage = "Сервис распознавания недоступен. Попробуйте позже.";
+            // Проверяем, является ли это ошибкой превышения лимита файлов
+            if (error.message.includes('Превышен лимит файлов для Job')) {
+              errorMessage = "Превышен лимит файлов для Job. Чтобы добавить новый файл, удалите предыдущие.";
+            } else {
+              errorMessage = "Сервис распознавания недоступен. Попробуйте позже.";
+            }
             break;
           case 422:
             errorMessage = "Не удалось распознать инструменты на фото. Проверьте качество изображения.";

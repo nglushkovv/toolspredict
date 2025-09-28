@@ -13,4 +13,6 @@ public interface ManageJobsService {
     PreprocessResponse getProcessedFiles(String minioKey, Long jobId);
 
     ResponseEntity<?> sendToClassification(Long jobId);
+
+    ResponseEntity<?> testModels(MultipartFile file);
 }

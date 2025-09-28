@@ -3,10 +3,12 @@ import { OrdersList, Order } from "@/components/OrdersList";
 import { OrderDetails } from "@/components/OrderDetails";
 import { FileUpload } from "@/components/FileUpload";
 import { RecognitionResults } from "@/components/RecognitionResults";
+import { TestModelUpload } from "@/components/TestModelUpload";
+import { TestModelResults } from "@/components/TestModelResults";
 import { useToast } from "@/hooks/use-toast";
 import { apiService, ApiError } from "@/lib/api";
 
-type ViewState = "orders" | "details" | "upload" | "results";
+type ViewState = "orders" | "details" | "upload" | "results" | "testModel" | "testResults";
 type ActionType = "issue" | "return";
 
 interface UploadedFile {
@@ -23,6 +25,10 @@ interface JobData {
   actionType: "TOOLS_ISSUANCE" | "TOOLS_RETURN";
 }
 
+interface TestJobData {
+  jobId: number;
+}
+
 // Empty initial orders - will be loaded from API
 const initialOrders: Order[] = [];
 
@@ -33,6 +39,7 @@ const Index = () => {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [jobData, setJobData] = useState<JobData | null>(null);
+  const [testJobData, setTestJobData] = useState<TestJobData | null>(null);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
@@ -55,12 +62,33 @@ const Index = () => {
       const saved = localStorage.getItem('afl-tools-ui-state');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.currentView) setCurrentView(parsed.currentView);
+        
+        // Проверяем валидность состояний перед восстановлением
+        if (parsed.currentView && ['orders', 'details', 'upload', 'results', 'testModel', 'testResults'].includes(parsed.currentView)) {
+          // Если это testResults, проверяем что testJobData валидный
+          if (parsed.currentView === 'testResults') {
+            if (parsed.testJobData && typeof parsed.testJobData.jobId === 'number') {
+              setCurrentView(parsed.currentView);
+              setTestJobData(parsed.testJobData);
+            } else {
+              console.log('Invalid testJobData, staying on orders view');
+              setCurrentView("orders");
+            }
+          } else {
+            setCurrentView(parsed.currentView);
+          }
+        }
+        
         if (parsed.selectedOrderId) setSelectedOrderId(parsed.selectedOrderId);
         if (parsed.actionType) setActionType(parsed.actionType);
         if (parsed.jobData) setJobData(parsed.jobData);
+        if (parsed.testJobData && parsed.currentView !== 'testResults') setTestJobData(parsed.testJobData);
       }
-    } catch {}
+    } catch (error) {
+      console.error('Error restoring state from localStorage:', error);
+      // Очищаем поврежденное состояние
+      localStorage.removeItem('afl-tools-ui-state');
+    }
   }, []);
 
   // Persist view state to localStorage
@@ -70,11 +98,12 @@ const Index = () => {
       selectedOrderId,
       actionType,
       jobData,
+      testJobData,
     };
     try {
       localStorage.setItem('afl-tools-ui-state', JSON.stringify(data));
     } catch {}
-  }, [currentView, selectedOrderId, actionType, jobData]);
+  }, [currentView, selectedOrderId, actionType, jobData, testJobData]);
 
   const loadOrders = async (targetPage = 0, append = false) => {
     try {
@@ -189,7 +218,34 @@ const Index = () => {
     setSelectedOrderId(null);
     setUploadedFiles([]);
     setJobData(null);
+    setTestJobData(null);
     try { localStorage.removeItem('afl-tools-ui-state'); } catch {}
+  };
+
+  const handleTestModel = () => {
+    setCurrentView("testModel");
+  };
+
+  const handleBackFromTestModel = () => {
+    setCurrentView("orders");
+  };
+
+  const handleNextFromTestModel = (jobId: number) => {
+    console.log('Setting testJobData with jobId:', jobId);
+    setTestJobData({ jobId });
+    setCurrentView("testResults");
+  };
+
+  const handleBackFromTestResults = () => {
+    setCurrentView("testModel");
+  };
+
+  const handleCompleteTestModel = () => {
+    toast({
+      title: "Тестирование завершено",
+      description: "Результаты тестирования модели получены",
+    });
+    handleBackToOrders();
   };
 
   const handleNextFromDetails = async () => {
@@ -341,6 +397,11 @@ const Index = () => {
   };
 
   const renderCurrentView = () => {
+    console.log('Current view state:', currentView);
+    console.log('Selected order ID:', selectedOrderId);
+    console.log('Job data:', jobData);
+    console.log('Test job data:', testJobData);
+    
     switch (currentView) {
       case "orders":
         return (
@@ -348,6 +409,7 @@ const Index = () => {
             onIssue={handleIssueOrder}
             onReturn={handleReturnOrder}
             onRequestOrders={handleRequestOrders}
+            onTestModel={handleTestModel}
             orders={orders}
             loading={loading}
             loadingMore={loadingMore}
@@ -392,7 +454,33 @@ const Index = () => {
           />
         );
 
+      case "testModel":
+        return (
+          <TestModelUpload
+            onBack={handleBackFromTestModel}
+            onNext={handleNextFromTestModel}
+          />
+        );
+
+      case "testResults":
+        if (!testJobData || testJobData.jobId === undefined) {
+          console.error('TestJobData is missing or jobId is undefined:', testJobData);
+          // Fallback to orders view if testJobData is invalid
+          setCurrentView("orders");
+          return null;
+        }
+        return (
+          <TestModelResults
+            jobId={testJobData.jobId}
+            onBack={handleBackFromTestResults}
+            onComplete={handleCompleteTestModel}
+          />
+        );
+
       default:
+        console.error('Unknown view state:', currentView);
+        // Fallback to orders view for unknown states
+        setCurrentView("orders");
         return null;
     }
   };
@@ -404,6 +492,36 @@ const Index = () => {
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
         </div>
       )}
+      
+      {/* Debug info - remove in production */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="fixed top-4 right-4 bg-black/80 text-white p-2 rounded text-xs z-50">
+          <div>View: {currentView}</div>
+          <div>Order: {selectedOrderId || 'none'}</div>
+          <div>TestJob: {testJobData?.jobId || 'none'}</div>
+          <button 
+            onClick={() => {
+              setCurrentView("orders");
+              setSelectedOrderId(null);
+              setJobData(null);
+              setTestJobData(null);
+            }}
+            className="bg-red-500 px-2 py-1 rounded mt-1 mr-1"
+          >
+            Reset
+          </button>
+          <button 
+            onClick={() => {
+              localStorage.removeItem('afl-tools-ui-state');
+              window.location.reload();
+            }}
+            className="bg-orange-500 px-2 py-1 rounded mt-1"
+          >
+            Clear Storage
+          </button>
+        </div>
+      )}
+      
       {renderCurrentView()}
     </div>
   );

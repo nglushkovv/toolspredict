@@ -13,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
@@ -118,6 +119,7 @@ public class ManageJobsServiceImpl implements ManageJobsService {
         try {
             ClassificationResponse response = (ClassificationResponse) senderService.sendToInference(classificationRequest).getBody();
             logService.logClassificationResult(response, job);
+            if (job.getStatus().equals("TEST")) return ResponseEntity.ok(response);
             return comparsionService.compareResults(job);
         } catch (Exception ex) {
             log.error("Ошибка классификации: {}", ex.getMessage());
@@ -125,6 +127,21 @@ public class ManageJobsServiceImpl implements ManageJobsService {
         return ResponseEntity.ok(classificationRequest);
     }
 
+    @Override
+    public ResponseEntity<?> testModels(MultipartFile file) {
+        Job job = jobService.createTestJob();
+        List<String> savedKeys = minioFileService.createFromArchive(file, job);
+        for (String key : savedKeys) {
+            try {
+                PreprocessResponse response = getProcessedFiles(key, job.getId());
+                logService.logPreprocessResult(job.getId(), response, key);
+            } catch (Exception ex) {
+                log.error("Ошибка обработки файла {}: {}", key, ex.getMessage());
+            }
+        }
+        sendToClassification(job.getId());
+        return ResponseEntity.ok(job.getId());
+    }
 
 
 

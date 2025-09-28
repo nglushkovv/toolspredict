@@ -19,6 +19,7 @@ interface OrdersListProps {
   onIssue: (orderId: string) => void;
   onReturn: (orderId: string) => void;
   onRequestOrders: () => void;
+  onTestModel: () => void;
   orders: Order[];
   loading?: boolean;
   loadingMore?: boolean;
@@ -40,7 +41,7 @@ const getStatusBadge = (status: Order["status"]) => {
   }
 };
 
-export const OrdersList = ({ onIssue, onReturn, onRequestOrders, orders, loading = false, loadingMore = false, hasMore = false, onLoadMore }: OrdersListProps) => {
+export const OrdersList = ({ onIssue, onReturn, onRequestOrders, onTestModel, orders, loading = false, loadingMore = false, hasMore = false, onLoadMore }: OrdersListProps) => {
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -68,20 +69,29 @@ export const OrdersList = ({ onIssue, onReturn, onRequestOrders, orders, loading
           </div>
         </div>
         
-        <Button 
-          onClick={onRequestOrders}
-          className="bg-primary hover:bg-primary/90"
-          disabled={loading}
-        >
-          {loading ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              Загрузка...
-            </>
-          ) : (
-            "Обновить заказы из ТОиР"
-          )}
-        </Button>
+        <div className="flex space-x-3">
+          <Button 
+            onClick={onTestModel}
+            variant="outline"
+            className="border-primary text-primary hover:bg-primary hover:text-primary-foreground"
+          >
+            Тест модели
+          </Button>
+          <Button 
+            onClick={onRequestOrders}
+            className="bg-primary hover:bg-primary/90"
+            disabled={loading}
+          >
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                Загрузка...
+              </>
+            ) : (
+              "Обновить заказы из ТОиР"
+            )}
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-4">

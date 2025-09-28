@@ -26,7 +26,6 @@ import java.util.UUID;
 public class JobServiceImpl implements JobService {
     private final ProcessingJobsRepository processingJobsRepository;
     private final OrderRepository orderRepository;
-    private final JobRepository jobRepository;
     private final PreprocessResultRepository preprocessResultRepository;
     private final PredictionResultRepository predictionResultRepository;
     private final MinioFileService minioFileService;
@@ -73,6 +72,7 @@ public class JobServiceImpl implements JobService {
     @Override
     public void updateStatus(Long jobId, JobStatus status) {
         Job job = getJob(jobId);
+        if (job.getStatus().equals("TEST")) return;
         job.setStatus(status.toString());
         processingJobsRepository.save(job);
     }
@@ -112,5 +112,16 @@ public class JobServiceImpl implements JobService {
 
     public List<Tool> getToolResults(Long jobId) {
         return null;
+    }
+
+    @Override
+    public Job createTestJob() {
+        processingJobsRepository.findFirstByStatus("TEST")
+                .ifPresent(job -> deleteJob(job.getId()));
+
+        Job job = new Job()
+           .setStatus("TEST")
+           .setCreateDate(LocalDateTime.now());
+        return processingJobsRepository.save(job);
     }
 }

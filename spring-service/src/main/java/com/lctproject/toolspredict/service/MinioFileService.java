@@ -27,4 +27,5 @@ public interface MinioFileService {
 
     Map<String, List<String>> getPackages(Job job);
 
+    List<String> createFromArchive(MultipartFile file, Job job);
 }

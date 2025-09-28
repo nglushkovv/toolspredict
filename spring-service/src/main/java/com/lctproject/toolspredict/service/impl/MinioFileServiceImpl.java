@@ -11,7 +11,9 @@ import com.lctproject.toolspredict.service.MinioService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import java.io.IOException;
 import java.nio.file.NoSuchFileException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,6 +23,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 
 @Service
@@ -151,4 +155,37 @@ public class MinioFileServiceImpl implements MinioFileService {
         });
         return packages;
     }
+
+    @Override
+    public List<String> createFromArchive(MultipartFile file, Job job) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("Архив пустой");
+        }
+        List<String> result = new ArrayList<>();
+
+        try (ZipInputStream zis = new ZipInputStream(file.getInputStream())) {
+            ZipEntry entry;
+
+            while ((entry = zis.getNextEntry()) != null) {
+                if (!entry.isDirectory()) {
+                    String fileName = entry.getName();
+                    log.info("Загружаем: " + fileName);
+                    MinioFile newFile = new MinioFile()
+                            .setBucketName(bucketRaw)
+                            .setFileName(fileName)
+                            .setFilePath(job.getId() + "/" + fileName)
+                            .setPackageId(job);
+                    minioFileRepository.save(newFile);
+                    minioService.uploadFileFromStream(fileName, zis, entry.getSize(), job.getId());
+                    result.add(newFile.getFilePath());
+                    zis.closeEntry();
+                }
+            }
+
+        } catch (IOException e) {
+            throw new RuntimeException("Ошибка при обработке архива", e);
+        }
+        return result;
+    }
+
 }

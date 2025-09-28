@@ -4,6 +4,7 @@ import com.lctproject.toolspredict.dto.minio.MinioFileDto;
 import com.lctproject.toolspredict.service.MinioService;
 import io.minio.*;
 import io.minio.errors.*;
+import io.minio.messages.Item;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,6 +16,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.zip.ZipInputStream;
 
 @Slf4j
 @Service
@@ -160,6 +164,53 @@ public class MinioServiceImpl implements MinioService {
             log.error("Ошибка скачивания файла из MinIO: {}", e.getMessage(), e);
             return null;
         }
+    }
+
+    @Override
+    public void uploadFileFromStream(String fileName, ZipInputStream zis, long size, Long jobId) {
+        try {
+            String path = jobId + "/" + fileName;
+
+            PutObjectArgs.Builder builder = PutObjectArgs.builder()
+                    .bucket(bucketRaw)
+                    .object(path)
+                    .contentType("application/octet-stream");
+
+            if (size > 0) {
+                builder.stream(zis, size, -1);
+            } else {
+                builder.stream(zis, -1, 10 * 1024 * 1024);
+            }
+
+            client.putObject(builder.build());
+
+            log.info("Файл успешно загружен: {}", path);
+        } catch (Exception ex) {
+            log.error("Ошибка загрузки файла в MinIO: {}", ex.getMessage(), ex);
+        }
+    }
+
+    @Override
+    public List<Item> listObjects(String bucketName, String prefix) {
+        List<Item> items = new ArrayList<>();
+        try {
+            Iterable<Result<Item>> results = client.listObjects(
+                    ListObjectsArgs.builder()
+                            .bucket(bucketName)
+                            .prefix(prefix)
+                            .recursive(true)
+                            .build()
+            );
+
+            for (Result<Item> result : results) {
+                items.add(result.get());
+            }
+
+        } catch (Exception e) {
+            throw new RuntimeException("Ошибка при получении списка объектов из MinIO", e);
+        }
+
+        return items;
     }
 
 }
