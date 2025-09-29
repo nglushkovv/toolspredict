@@ -12,7 +12,4 @@ public class Tool {
     private Long id;
     @Column(name="tool_name")
     private String name;
-    @ManyToOne
-    @JoinColumn(name = "tool_reference_id")
-    private ToolReference toolReference;
 }

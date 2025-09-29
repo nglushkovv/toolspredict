@@ -102,7 +102,7 @@ async def preprocess(key: str = Query(..., description="Ключ файла в M
 
     return JSONResponse(content={
         "status": "ok",
-        "preprocessResults": preprocess_results,
+        "results": preprocess_results,
         "size": sizes,
         "message": "Processed successfully"
     })
@@ -164,7 +164,7 @@ async def video_preprocess(key: str = Query(..., description="Ключ виде�
 
     return JSONResponse(content={
         "status": "ok",
-        "preprocessResults": preprocess_results,
+        "results": preprocess_results,
         "size": sizes,
         "message": "Video split into frames successfully"
     })

@@ -21,7 +21,6 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 public class LogServiceImpl implements LogService {
-    private final ToolReferenceRepository toolReferenceRepository;
     private final ToolRepository toolRepository;
     private final MinioFileRepository minioFileRepository;
     private final MinioFileService minioFileService;
@@ -35,15 +34,19 @@ public class LogServiceImpl implements LogService {
     private String bucketResults;
 
     @Override
-    public void logClassificationResult(Long jobId, ClassificationResultDTO classificationResultDTO, String fileKey) {
+    public void logClassificationResult(Long jobId, ClassificationResultDTO classificationResultDTO, String rawFileKey) {
+            String key = classificationResultDTO.getObjectKey();
+            String microClass = key.substring(key.lastIndexOf("/")+1, key.lastIndexOf("_"));
+            log.info(microClass);
+            log.info(key);
 
             ClassificationResult classificationResult = new ClassificationResult()
                     .setJob(jobService.getJob(jobId))
-                    .setFile(minioFileRepository.findByFilePathAndBucketName(fileKey, bucketProcessed))
-                    .setOriginalFile(minioFileRepository.findByFilePathAndBucketName(classificationResultDTO.getRawFileKey(), bucketRaw))
+                    .setFile(minioFileRepository.findByFilePathAndBucketName(classificationResultDTO.getObjectKey(), bucketProcessed))
+                    .setOriginalFile(minioFileRepository.findByFilePathAndBucketName(rawFileKey, bucketRaw))
                     .setCreatedAt(LocalDateTime.now())
                     .setConfidence(classificationResultDTO.getConfidence())
-                    .setTool(toolRepository.findByName(classificationResultDTO.getMicroClass()))
+                    .setTool(toolRepository.findByName(microClass))
                     .setMarking(classificationResultDTO.getMarking());
 
             classificationResultRepository.save(classificationResult);
