@@ -8,9 +8,9 @@ import java.time.LocalDateTime;
 
 @Data
 @Entity
-@Table(name = "preprocess_result", schema = "public")
+@Table(name = "classification_result", schema = "public")
 @Accessors(chain = true)
-public class PreprocessResult {
+public class ClassificationResult {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -18,9 +18,9 @@ public class PreprocessResult {
     @JoinColumn(name = "job_id")
     private Job job;
     @ManyToOne
-    @JoinColumn(name = "tool_reference_id")
-    private ToolReference toolReference;
-    @OneToOne
+    @JoinColumn(name = "tool_id")
+    private Tool tool;
+    @ManyToOne
     @JoinColumn(name = "file_id")
     private MinioFile file;
     @ManyToOne
@@ -30,4 +30,6 @@ public class PreprocessResult {
     private Double confidence;
     @Column(name = "created_at")
     private LocalDateTime createdAt;
+    @Column(name = "marking")
+    private String marking;
 }

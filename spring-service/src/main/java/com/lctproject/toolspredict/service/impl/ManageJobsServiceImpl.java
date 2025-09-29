@@ -1,9 +1,6 @@
 package com.lctproject.toolspredict.service.impl;
 
-import com.lctproject.toolspredict.dto.ClassificationResponse;
-import com.lctproject.toolspredict.dto.JobStatus;
-import com.lctproject.toolspredict.dto.PreprocessResponse;
-import com.lctproject.toolspredict.dto.ClassificationRequest;
+import com.lctproject.toolspredict.dto.*;
 import com.lctproject.toolspredict.model.Job;
 import com.lctproject.toolspredict.service.*;
 import lombok.RequiredArgsConstructor;
@@ -40,11 +37,13 @@ public class ManageJobsServiceImpl implements ManageJobsService {
         if (rawFileKey.substring(rawFileKey.lastIndexOf('.')+1).equals("mp4")) {
             int countSaved = 0;
             StringBuilder builder = new StringBuilder();
-            PreprocessResponse response = getFrames(rawFileKey, jobId);
-            for (Map.Entry<String, String> entry: response.getPreprocessResults().entrySet()) {
+            FrameResponse response = getFrames(rawFileKey, jobId);
+            for (Map.Entry<String, String> entry: response.getResults().entrySet()) {
                 try {
-                    PreprocessResponse frameResponse = getProcessedFiles(entry.getValue(), jobId);
-                    logService.logPreprocessResult(jobId, frameResponse, entry.getValue());
+                    ClassificationResponseDTO classificationResponseDTO = sendToRecognition(entry.getValue(), jobId);
+                    for (Map.Entry<String,ClassificationResultDTO> entrySecond: classificationResponseDTO.getResults().entrySet()) {
+                        logService.logClassificationResult(jobId, entrySecond.getValue(), entry.getKey());
+                    }
                     countSaved++;
                     builder.append(entry.getValue()).append(": ").append("OK").append("\n");
                 } catch (NoSuchElementException e) {
@@ -58,8 +57,14 @@ public class ManageJobsServiceImpl implements ManageJobsService {
             if (countSaved == 0) throw new RuntimeException(builder.toString());
             return builder.toString();
         } else {
-            PreprocessResponse response = getProcessedFiles(rawFileKey, jobId);
-            logService.logPreprocessResult(jobId, response, rawFileKey);
+            ClassificationResponseDTO response = sendToRecognition(rawFileKey, jobId);
+            for (Map.Entry<String,ClassificationResultDTO> entry: response.getResults().entrySet()) {
+                ClassificationResultDTO classificationResultDTO = entry.getValue()
+                        .setRawFileKey(rawFileKey);
+                String marking = null;
+                marking = sendToEnrichment(jobId, rawFileKey, classificationResultDTO);
+                logService.logClassificationResult(jobId, classificationResultDTO.setMarking(marking), entry.getKey());
+            }
             return "OK";
         }
     }
@@ -82,64 +87,67 @@ public class ManageJobsServiceImpl implements ManageJobsService {
     }
 
     @Override
-    public PreprocessResponse getProcessedFiles(String minioKey, Long jobId) {
+    public ClassificationResponseDTO sendToRecognition(String minioKey, Long jobId) {
         Job job = jobService.getJob(jobId);
         try {
-            ResponseEntity<?> response = senderService.sendToPreprocess(minioKey);
-            PreprocessResponse preprocessResponse = (PreprocessResponse) response.getBody();
-            if (preprocessResponse == null) throw new NullPointerException("PreprocessResponse is null");
-            for (Map.Entry<String, String> entry : preprocessResponse.getPreprocessResults().entrySet()){
-                log.info(entry.getValue());
-                minioFileService.create(bucketProcessed, entry.getValue(), job);
+            ResponseEntity<?> response = senderService.sendToRecognition(minioKey);
+            ClassificationResponseDTO classificationResponseDTO = (ClassificationResponseDTO) response.getBody();
+            if (classificationResponseDTO == null) throw new NullPointerException("No recognition");
+            for (Map.Entry<String, ClassificationResultDTO> entry : classificationResponseDTO.getResults().entrySet()){
+                minioFileService.create(bucketProcessed, entry.getKey(), job);
             }
-            jobService.updateStatus(job.getId(), JobStatus.PREPROCESS);
-            log.info("Успех {}", jobId);
-            return preprocessResponse;
+            if (!job.getStatus().equals("TEST")) jobService.updateStatus(job.getId(), JobStatus.FINISHED);
+            return classificationResponseDTO;
         } catch (NoSuchElementException e) {
             throw new NoSuchElementException(e.getMessage());
         }
     }
 
-    public PreprocessResponse getFrames(String minioKey, Long jobId) {
+    public FrameResponse getFrames(String minioKey, Long jobId) {
         ResponseEntity<?> response = senderService.sendVideoToCut(minioKey);
-        PreprocessResponse preprocessResponse = (PreprocessResponse) response.getBody();
-        if (preprocessResponse == null) throw new NullPointerException("PreprocessResponse is null");
+        FrameResponse frameResponse = (FrameResponse) response.getBody();
+        if (frameResponse == null) throw new NullPointerException("FrameResponse is null");
         Job job = jobService.getJob(jobId);
-        for (Map.Entry<String, String> entry : preprocessResponse.getPreprocessResults().entrySet()){
+        for (Map.Entry<String, String> entry : frameResponse.getResults().entrySet()){
             minioFileService.create(bucketRaw, entry.getValue(), job);
         }
-        return preprocessResponse;
+        return frameResponse;
     }
 
     @Override
-    public ResponseEntity<?> sendToClassification(Long jobId) {
+    public String sendToEnrichment(Long jobId, String rawFileKey, ClassificationResultDTO classificationResultDTO) {
         Job job = jobService.getJob(jobId);
-        ClassificationRequest classificationRequest = new ClassificationRequest()
-                .setPackages(minioFileService.getPackages(job));
+        EnrichmentRequest enrichmentRequest = new EnrichmentRequest()
+                .setMicroClass(classificationResultDTO.getMicroClass())
+                .setBbox(classificationResultDTO.getBbox())
+                .setRawFileKey(rawFileKey);
         try {
-            ClassificationResponse response = (ClassificationResponse) senderService.sendToInference(classificationRequest).getBody();
-            logService.logClassificationResult(response, job);
-            if (job.getStatus().equals("TEST")) return ResponseEntity.ok(response);
-            return comparsionService.compareResults(job);
+            EnrichmentResponse response = (EnrichmentResponse) senderService.sendToEnrichment(enrichmentRequest).getBody();
+            return response.getMarking();
         } catch (Exception ex) {
-            log.error("Ошибка классификации: {}", ex.getMessage());
+            log.error("Ошибка определения маркировки: {}", ex.getMessage());
         }
-        return ResponseEntity.ok(classificationRequest);
+        return null;
     }
 
     @Override
     public ResponseEntity<?> testModels(MultipartFile file) {
         Job job = jobService.createTestJob();
+        long jobId = job.getId();
         List<String> savedKeys = minioFileService.createFromArchive(file, job);
-        for (String key : savedKeys) {
+        for (String rawFileKey : savedKeys) {
             try {
-                PreprocessResponse response = getProcessedFiles(key, job.getId());
-                logService.logPreprocessResult(job.getId(), response, key);
+                ClassificationResponseDTO response = sendToRecognition(rawFileKey, jobId);
+                for (Map.Entry<String,ClassificationResultDTO> entry: response.getResults().entrySet()) {
+                    ClassificationResultDTO classificationResultDTO = entry.getValue()
+                            .setRawFileKey(rawFileKey);
+                    String marking = sendToEnrichment(jobId, rawFileKey, classificationResultDTO);
+                    logService.logClassificationResult(jobId, classificationResultDTO.setMarking(marking), entry.getKey());
+                }
             } catch (Exception ex) {
-                log.error("Ошибка обработки файла {}: {}", key, ex.getMessage());
+                log.error("Ошибка обработки файла {}: {}", rawFileKey, ex.getMessage());
             }
         }
-        sendToClassification(job.getId());
         return ResponseEntity.ok(job.getId());
     }
 

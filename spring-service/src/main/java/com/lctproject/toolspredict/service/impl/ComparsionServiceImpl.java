@@ -1,9 +1,12 @@
 package com.lctproject.toolspredict.service.impl;
 
 import com.lctproject.toolspredict.dto.JobStatus;
-import com.lctproject.toolspredict.model.*;
+import com.lctproject.toolspredict.model.ClassificationResult;
+import com.lctproject.toolspredict.model.Job;
+import com.lctproject.toolspredict.model.Order;
+import com.lctproject.toolspredict.model.ToolOrderItem;
 import com.lctproject.toolspredict.repository.AccountingRepository;
-import com.lctproject.toolspredict.repository.PredictionResultRepository;
+import com.lctproject.toolspredict.repository.ClassificationResultRepository;
 import com.lctproject.toolspredict.repository.ToolOrderItemRepository;
 import com.lctproject.toolspredict.service.ComparsionService;
 import com.lctproject.toolspredict.service.JobService;
@@ -21,25 +24,27 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class ComparsionServiceImpl implements ComparsionService {
-    private final PredictionResultRepository predictionResultRepository;
+    private final ClassificationResultRepository classificationResultRepository;
     private final ToolOrderItemRepository toolOrderItemRepository;
     private final AccountingRepository accountingRepository;
     private final JobService jobService;
     private final OrderService orderService;
-    @Value("${model.confidence.threshold}")
-    private Double CONFIDENCE_THRESHOLD;
 
     @Override
     public ResponseEntity<?> compareResults(Job job) {
         Order order = accountingRepository.findByJob(job).getOrder();
         List<ToolOrderItem> orderedItems = toolOrderItemRepository.findByOrder(order);
-        List<PredictionResult> results = getMergedResults(job.getId());
+
+        List<ClassificationResult> results = getMergedResults(job.getId());
+
         List<Long> predictedToolList = results.stream()
-                .map(pr -> pr.getTool().getId())
+                .map(cr -> cr.getTool().getId())
+                .sorted()
                 .toList();
 
         List<Long> orderedToolList = orderedItems.stream()
-                .map(item -> item.getTool().getId()).sorted()
+                .map(item -> item.getTool().getId())
+                .sorted()
                 .toList();
 
         boolean isEqual = predictedToolList.equals(orderedToolList);
@@ -55,7 +60,7 @@ public class ComparsionServiceImpl implements ComparsionService {
     @Override
     @Deprecated
     public List<Long> getMergedToolList(Long jobId) {
-        return predictionResultRepository.findMaxToolCountPerJob(jobId).stream()
+        return classificationResultRepository.findMaxToolCountPerJob(jobId).stream()
                 .flatMap(row -> {
                     Long toolId = ((Number) row[0]).longValue();
                     int count = ((Number) row[1]).intValue();
@@ -64,51 +69,49 @@ public class ComparsionServiceImpl implements ComparsionService {
                 .toList();
     }
 
-
-    public Map<Long, List<PredictionResult>> getPredictionResultsGroupedByOriginalFile(Job job) {
-        return predictionResultRepository.findAllByJobIdOrderByToolId(job.getId()).stream()
+    public Map<Long, List<ClassificationResult>> getResultsGroupedByOriginalFile(Job job) {
+        return classificationResultRepository.findAllByJobIdOrderByToolId(job.getId()).stream()
                 .collect(Collectors.groupingBy(
-                        pr -> pr.getPreprocessResult().getOriginalFile().getId(),
+                        cr -> cr.getOriginalFile().getId(),
                         LinkedHashMap::new,
                         Collectors.collectingAndThen(
-                                Collectors.<PredictionResult>toList(),
+                                Collectors.<ClassificationResult>toList(),
                                 list -> list.stream()
-                                        .sorted(Comparator.comparing(pr -> pr.getTool().getId()))
+                                        .sorted(Comparator.comparing(cr -> cr.getTool().getId()))
                                         .toList()
                         )
                 ));
     }
 
-    public List<PredictionResult> mergeByMaxOccurrences(Map<Long, List<PredictionResult>> groupedByOriginalFile) {
-        Map<Long, List<PredictionResult>> resultMap = new HashMap<>();
+    public List<ClassificationResult> mergeByMaxOccurrences(Map<Long, List<ClassificationResult>> groupedByOriginalFile) {
+        Map<Long, List<ClassificationResult>> resultMap = new HashMap<>();
 
-        for (List<PredictionResult> list : groupedByOriginalFile.values()) {
-            log.info(String.valueOf(list));
-            Map<Long, List<PredictionResult>> groupedByTool = list.stream()
-                    .collect(Collectors.groupingBy(pr -> pr.getTool().getId()));
+        for (List<ClassificationResult> list : groupedByOriginalFile.values()) {
+            log.info("Processing list: {}", list);
 
-            for (Map.Entry<Long, List<PredictionResult>> entry : groupedByTool.entrySet()) {
+            Map<Long, List<ClassificationResult>> groupedByTool = list.stream()
+                    .collect(Collectors.groupingBy(cr -> cr.getTool().getId()));
+
+            for (Map.Entry<Long, List<ClassificationResult>> entry : groupedByTool.entrySet()) {
                 long toolId = entry.getKey();
-                List<PredictionResult> items = entry.getValue();
+                List<ClassificationResult> items = entry.getValue();
 
                 if (!resultMap.containsKey(toolId) || items.size() > resultMap.get(toolId).size()) {
                     resultMap.put(toolId, items);
                 }
             }
         }
-        List<PredictionResult> finalResult = resultMap.values().stream()
-                .flatMap(List::stream)
-                .sorted(Comparator.comparing(pr -> pr.getTool().getId()))
-                .collect(Collectors.toList());
 
-        return finalResult;
+        return resultMap.values().stream()
+                .flatMap(List::stream)
+                .sorted(Comparator.comparing(cr -> cr.getTool().getId()))
+                .toList();
     }
 
     @Override
-    public List<PredictionResult> getMergedResults(Long jobId) {
-        Map<Long, List<PredictionResult>> groupedByOriginalFile = getPredictionResultsGroupedByOriginalFile(jobService.getJob(jobId));
+    public List<ClassificationResult> getMergedResults(Long jobId) {
+        Map<Long, List<ClassificationResult>> groupedByOriginalFile =
+                getResultsGroupedByOriginalFile(jobService.getJob(jobId));
         return mergeByMaxOccurrences(groupedByOriginalFile);
     }
-
-
 }

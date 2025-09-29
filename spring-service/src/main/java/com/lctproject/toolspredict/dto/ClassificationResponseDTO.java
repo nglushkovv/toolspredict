@@ -4,15 +4,12 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.List;
 import java.util.Map;
 
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class PreprocessResponse {
+public class ClassificationResponseDTO {
     private String status;
-    private Map<String, String> preprocessResults; //macroClass: minioKey
-    private List<String> size;
-    private String message;
+    private Map<String, ClassificationResultDTO> results;
 }

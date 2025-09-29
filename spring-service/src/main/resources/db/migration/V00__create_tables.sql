@@ -23,16 +23,10 @@ create table if not exists public.minio_file (
     unique(bucket_name, file_path)
 );
 
-create table if not exists public.tool_reference (
-    id serial primary key,
-    tool_reference_name varchar(255)
-);
 
 create table if not exists public.tool (
     id serial primary key,
-    tool_name varchar(255),
-    tool_reference_id int,
-    constraint fk_tool_reference_id foreign key (tool_reference_id) references tool_reference(id)
+    tool_name varchar(255) unique
 );
 
 
@@ -64,35 +58,21 @@ create table if not exists public.tool_order_item (
     constraint fk_item_tool_id foreign key (tool_id) references tool(id)
 );
 
-create table if not exists public.preprocess_result (
-    id bigserial primary key,
-    job_id bigint,
-    tool_reference_id int,
-    file_id bigint,
-    original_file_id bigint,
-    confidence double precision,
-    created_at timestamp,
-    constraint fk_preprocess_result_job_id foreign key (job_id) references processing_jobs(id) on delete cascade,
-    constraint fk_preprocess_result_reference_id foreign key (tool_reference_id) references tool_reference(id),
-    constraint fk_file_id foreign key (file_id) references minio_file(id) on delete cascade,
-    constraint fk_original_file_id foreign key (original_file_id) references minio_file(id) on delete cascade,
-    unique(file_id, original_file_id)
-);
-
-create table if not exists public.prediction_result(
+create table if not exists public.classification_result(
        id bigserial primary key,
        job_id bigint,
        tool_id int,
        file_id bigint,
-       preprocess_result_id bigint unique,
+       original_file_id bigint,
        marking varchar(255),
        confidence double precision,
        created_at timestamp,
        constraint fk_job_id foreign key (job_id) references processing_jobs(id) on delete cascade,
-    constraint fk_tool_id foreign key (tool_id) references tool(id),
-    constraint fk_prediction_minio_file foreign key (file_id) references minio_file(id) on delete cascade,
-    constraint fk_preprocess_result_id foreign key (preprocess_result_id) references preprocess_result(id) on delete cascade
-    );
+       constraint fk_tool_id foreign key (tool_id) references tool(id),
+       constraint fk_classification_minio_file foreign key (file_id) references minio_file(id) on delete cascade,
+       constraint fk_original_minio_file foreign key (original_file_id) references minio_file(id) on delete cascade
+
+);
 
 
 

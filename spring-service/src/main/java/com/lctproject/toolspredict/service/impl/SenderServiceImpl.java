@@ -1,9 +1,6 @@
 package com.lctproject.toolspredict.service.impl;
 
-import com.lctproject.toolspredict.dto.ClassificationRequest;
-import com.lctproject.toolspredict.dto.InferenceRequest;
-import com.lctproject.toolspredict.dto.ClassificationResponse;
-import com.lctproject.toolspredict.dto.PreprocessResponse;
+import com.lctproject.toolspredict.dto.*;
 import com.lctproject.toolspredict.service.SenderService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -29,21 +26,20 @@ public class SenderServiceImpl implements SenderService {
     }
 
     @Override
-    public ResponseEntity<PreprocessResponse> sendToPreprocess(String minioKey) {
+    public ResponseEntity<ClassificationResponseDTO> sendToRecognition(String minioKey) {
         try {
             log.info("Отправка ключа файла в сервис предобработки...");
             String url = UriComponentsBuilder.fromUriString(preprocessServiceUrl + "/preprocess")
                     .queryParam("key", minioKey)
                     .toUriString();
-            ResponseEntity<PreprocessResponse> response = restTemplate.postForEntity(url, null, PreprocessResponse.class);
+            ResponseEntity<ClassificationResponseDTO> response = restTemplate.postForEntity(url, null, ClassificationResponseDTO.class);
             if (response.getStatusCode().is2xxSuccessful()) {
                 log.info("Файл с ключем {} успешно обработан.", minioKey);
                 return ResponseEntity.ok(response.getBody());
             } else {
                 log.warn("Предобработка вернула статус {}", response.getStatusCode());
-                PreprocessResponse errorBody = new PreprocessResponse();
+                ClassificationResponseDTO errorBody = new ClassificationResponseDTO();
                 errorBody.setStatus("error");
-                errorBody.setMessage("Предобработка вернула статус: " + response.getStatusCode());
                 return ResponseEntity.status(response.getStatusCode()).body(errorBody);
             }
         } catch (HttpClientErrorException.UnprocessableEntity e) {
@@ -57,10 +53,10 @@ public class SenderServiceImpl implements SenderService {
     }
 
     @Override
-    public ResponseEntity<ClassificationResponse> sendToInference(ClassificationRequest request) {
+    public ResponseEntity<EnrichmentResponse> sendToEnrichment(EnrichmentRequest request) {
         try {
-            ResponseEntity<ClassificationResponse> response = restTemplate.postForEntity(inferenceServiceUrl + "/classify",
-                    request, ClassificationResponse.class);
+            ResponseEntity<EnrichmentResponse> response = restTemplate.postForEntity(inferenceServiceUrl + "/classify",
+                    request, EnrichmentResponse.class);
             if (response.getStatusCode().is2xxSuccessful()) {
                 log.info("Успешно получены микроклассы от inference-сервиса");
                 return response;
@@ -76,19 +72,19 @@ public class SenderServiceImpl implements SenderService {
     }
 
     @Override
-    public ResponseEntity<PreprocessResponse> sendVideoToCut(String minioKey) {
+    public ResponseEntity<FrameResponse> sendVideoToCut(String minioKey) {
         try {
             log.info("Отправка ключа видеофайла на разделение по кадрам");
             String url = UriComponentsBuilder.fromUriString(preprocessServiceUrl + "/video/cut")
                     .queryParam("key", minioKey)
                     .toUriString();
-            ResponseEntity<PreprocessResponse> response = restTemplate.postForEntity(url, null, PreprocessResponse.class);
+            ResponseEntity<FrameResponse> response = restTemplate.postForEntity(url, null, FrameResponse.class);
             if (response.getStatusCode().is2xxSuccessful()) {
                 log.info("Файл с ключем {} успешно разделен по кадрам.", minioKey);
                 return ResponseEntity.ok(response.getBody());
             } else {
                 log.warn("Предобработка видео вернула статус {}", response.getStatusCode());
-                PreprocessResponse errorBody = new PreprocessResponse();
+                FrameResponse errorBody = new FrameResponse();
                 errorBody.setStatus("error");
                 errorBody.setMessage("Предобработка видео вернула статус: " + response.getStatusCode());
                 return ResponseEntity.status(response.getStatusCode()).body(errorBody);
