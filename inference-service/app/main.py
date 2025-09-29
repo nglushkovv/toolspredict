@@ -185,8 +185,13 @@ async def enrich(request: EnrichmentRequest):
 
         return JSONResponse(content={"marking": marking})
     except Exception as e:
-        # В случае любой ошибки — возвращаем marking: null
-        return JSONResponse(content={"marking": None})
+        import traceback
+        return JSONResponse(content={
+            "marking": None,
+            "error": str(e),
+            "trace": traceback.format_exc()
+        })
+
 
 if __name__ == "__main__":
     import uvicorn
