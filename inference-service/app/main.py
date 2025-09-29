@@ -7,6 +7,7 @@ from io import BytesIO
 import json
 import os
 import re
+from datetime import datetime
 
 from PIL import Image
 import torch
@@ -156,18 +157,35 @@ def load_model_on_startup():
 
 @app.post("/enrich")
 async def enrich(request: EnrichmentRequest):
+    import traceback
+
+    print("\n--- /enrich called ---")
+    print("Request:", request.dict())
+    debug_info = {}
+
     raw_bucket = getattr(settings, "minio_bucket_raw")
     processed_bucket = getattr(settings, "minio_bucket_processed")
+    debug_bucket = getattr(settings, "minio_bucket_debug", processed_bucket)
+    debug_folder = "debug_crops"
 
     try:
         # 1) Читаем картинку
+        print(f"Step 1: Fetching image from minio: bucket={raw_bucket} key={request.raw_file_key}")
         img = get_image_from_minio(raw_bucket, request.raw_file_key)
+        print("Step 1: Image loaded. Size:", img.size)
+        debug_info['orig_img_size'] = img.size
 
         # 2) Читаем метаданные (processed JSON) и пытаемся взять bbox
+        print(f"Step 2: Fetching meta from minio: bucket={processed_bucket} key={request.processed_file_key}")
         meta = get_json_from_minio(processed_bucket, request.processed_file_key)
+        print("Step 2: Meta loaded:", meta)
+        debug_info['meta'] = meta
         bbox = extract_bbox(meta)
+        print("Step 2: Extracted bbox:", bbox)
+        debug_info['bbox'] = bbox
 
         # 3) Кроп, если есть bbox
+        cropped_img = img
         if bbox is not None:
             x1, y1, x2, y2 = bbox
             # Защита от невалидных значений
@@ -176,22 +194,58 @@ async def enrich(request: EnrichmentRequest):
             x2 = max(0, min(x2, w))
             y1 = max(0, min(y1, h))
             y2 = max(0, min(y2, h))
+            print(f"Step 3: Crop coords cleaned: ({x1}, {y1}, {x2}, {y2}), img.size: {img.size}")
             if x2 > x1 and y2 > y1:
-                img = img.crop((x1, y1, x2, y2))
+                cropped_img = img.crop((x1, y1, x2, y2))
+                print("Step 3: Image cropped. New size:", cropped_img.size)
+                debug_info['cropped_size'] = cropped_img.size
+            else:
+                print("Step 3: Invalid bbox, skip crop.")
+        else:
+            print("Step 3: No bbox, skipping crop.")
+
+        # --- Сохраняем кроп в Minio для дебага ---
+        try:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+            debug_key = f"{debug_folder}/crop_{timestamp}_{request.raw_file_key.replace('/', '_')}.jpg"
+            buf = BytesIO()
+            cropped_img.save(buf, format='JPEG')
+            buf.seek(0)
+            minio_client.put_object(
+                debug_bucket, debug_key, buf, length=buf.getbuffer().nbytes, content_type="image/jpeg"
+            )
+            print(f"Step 3: Cropped image stored in minio at {debug_bucket}/{debug_key}")
+            debug_info["debug_crop_key"] = debug_key
+        except Exception as ex_save:
+            print("Step 3: Failed to upload debug crop:", ex_save)
+            debug_info["debug_crop_key"] = None
 
         # 4) OCR
+        print("Step 4: Running Florence OCR on cropped image.")
         ocr_service: OCRService = app.state.ocr_service
-        marking, _raw = ocr_service.run_ocr(img)
+        marking, _raw = ocr_service.run_ocr(cropped_img)
+        print("Step 4: OCR result - marking:", marking)
+        print("Step 4: OCR result - raw_output:", _raw)
+        debug_info['marking'] = marking
+        debug_info['raw_output'] = _raw
 
-        return JSONResponse(content={"marking": marking})
+        print("--- /enrich completed OK ---\n")
+        return JSONResponse(content={
+            "marking": marking,
+            "raw_output": _raw,
+            "bbox": bbox,
+            "debug_crop_key": debug_info["debug_crop_key"],
+            "meta": meta
+        })
     except Exception as e:
-        import traceback
+        print("!!! /enrich EXCEPTION:", str(e))
+        print(traceback.format_exc())
+        print("--- /enrich failed ---\n")
         return JSONResponse(content={
             "marking": None,
             "error": str(e),
             "trace": traceback.format_exc()
         })
-
 
 if __name__ == "__main__":
     import uvicorn
