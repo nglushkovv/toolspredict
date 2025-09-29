@@ -41,11 +41,7 @@ public class ManageJobsServiceImpl implements ManageJobsService {
             for (Map.Entry<String, String> entry: response.getResults().entrySet()) {
                 try {
                     ClassificationResponseDTO classificationResponseDTO = sendToRecognition(entry.getValue(), jobId);
-                    for (Map.Entry<String,ClassificationResultDTO> entrySecond: classificationResponseDTO.getResults().entrySet()) {
-                        ClassificationResultDTO classificationResultDTO = entrySecond.getValue();
-                        String marking = sendToEnrichment(jobId, rawFileKey, classificationResultDTO);
-                        logService.logClassificationResult(jobId, classificationResultDTO.setMarking(marking), rawFileKey);
-                    }
+                    handleClassificationResponse(classificationResponseDTO, jobId, rawFileKey);
                     countSaved++;
                     builder.append(entry.getValue()).append(": ").append("OK").append("\n");
                 } catch (NoSuchElementException e) {
@@ -60,12 +56,16 @@ public class ManageJobsServiceImpl implements ManageJobsService {
             return builder.toString();
         } else {
             ClassificationResponseDTO response = sendToRecognition(rawFileKey, jobId);
-            for (Map.Entry<String,ClassificationResultDTO> entry: response.getResults().entrySet()) {
-                ClassificationResultDTO classificationResultDTO = entry.getValue();
-                String marking = sendToEnrichment(jobId, rawFileKey, classificationResultDTO);
-                logService.logClassificationResult(jobId, classificationResultDTO.setMarking(marking), rawFileKey);
-            }
+            handleClassificationResponse(response, jobId, rawFileKey);
             return "OK";
+        }
+    }
+
+    private void handleClassificationResponse(ClassificationResponseDTO response, Long jobId, String rawFileKey) {
+        for (Map.Entry<String,ClassificationResultDTO> entry: response.getResults().entrySet()) {
+            ClassificationResultDTO classificationResultDTO = entry.getValue().setRawFileKey(rawFileKey);
+            String marking = sendToEnrichment(jobId, rawFileKey, entry.getKey());
+            logService.logClassificationResult(jobId, classificationResultDTO.setMarking(marking), entry.getKey());
         }
     }
 
@@ -94,7 +94,7 @@ public class ManageJobsServiceImpl implements ManageJobsService {
             ClassificationResponseDTO classificationResponseDTO = (ClassificationResponseDTO) response.getBody();
             if (classificationResponseDTO == null) throw new NullPointerException("No recognition");
             for (Map.Entry<String, ClassificationResultDTO> entry : classificationResponseDTO.getResults().entrySet()){
-                minioFileService.create(bucketProcessed, entry.getValue().getObjectKey(), job);
+                minioFileService.create(bucketProcessed, entry.getKey(), job);
             }
             if (!job.getStatus().equals("TEST")) jobService.updateStatus(job.getId(), JobStatus.FINISHED);
             return classificationResponseDTO;
@@ -115,10 +115,10 @@ public class ManageJobsServiceImpl implements ManageJobsService {
     }
 
     @Override
-    public String sendToEnrichment(Long jobId, String rawFileKey, ClassificationResultDTO classificationResultDTO) {
+    public String sendToEnrichment(Long jobId, String rawFileKey, String processedFileKey) {
         Job job = jobService.getJob(jobId);
         EnrichmentRequest enrichmentRequest = new EnrichmentRequest()
-                .setProcessedFileKey(classificationResultDTO.getObjectKey())
+                .setProcessedFileKey(processedFileKey)
                 .setRawFileKey(rawFileKey);
         try {
             EnrichmentResponse response = (EnrichmentResponse) senderService.sendToEnrichment(enrichmentRequest).getBody();
@@ -137,11 +137,7 @@ public class ManageJobsServiceImpl implements ManageJobsService {
         for (String rawFileKey : savedKeys) {
             try {
                 ClassificationResponseDTO response = sendToRecognition(rawFileKey, jobId);
-                for (Map.Entry<String,ClassificationResultDTO> entry: response.getResults().entrySet()) {
-                    ClassificationResultDTO classificationResultDTO = entry.getValue();
-                    String marking = sendToEnrichment(jobId, rawFileKey, classificationResultDTO);
-                    logService.logClassificationResult(jobId, classificationResultDTO.setMarking(marking),rawFileKey);
-                }
+                handleClassificationResponse(response, jobId, rawFileKey);
             } catch (Exception ex) {
                 log.error("Ошибка обработки файла {}: {}", rawFileKey, ex.getMessage());
             }

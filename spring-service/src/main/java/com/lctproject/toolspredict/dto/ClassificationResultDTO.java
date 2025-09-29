@@ -12,9 +12,11 @@ import lombok.experimental.Accessors;
 @AllArgsConstructor
 @Accessors(chain = true)
 public class ClassificationResultDTO {
-    @JsonProperty("object_key")
-    private String objectKey;
+    private String microClass;
     private Double confidence;
+    private double[] bbox;
     @JsonIgnore
     private String marking;
+    @JsonIgnore
+    private String rawFileKey;
 }

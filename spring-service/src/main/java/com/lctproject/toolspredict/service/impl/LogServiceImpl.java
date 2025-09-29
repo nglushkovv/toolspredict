@@ -34,19 +34,15 @@ public class LogServiceImpl implements LogService {
     private String bucketResults;
 
     @Override
-    public void logClassificationResult(Long jobId, ClassificationResultDTO classificationResultDTO, String rawFileKey) {
-            String key = classificationResultDTO.getObjectKey();
-            String microClass = key.substring(key.lastIndexOf("/")+1, key.lastIndexOf("_"));
-            log.info(microClass);
-            log.info(key);
-
+    public void logClassificationResult(Long jobId, ClassificationResultDTO classificationResultDTO, String processedFileKey) {
+            log.info("{}, {}", classificationResultDTO.getMicroClass(), classificationResultDTO.getRawFileKey());
             ClassificationResult classificationResult = new ClassificationResult()
                     .setJob(jobService.getJob(jobId))
-                    .setFile(minioFileRepository.findByFilePathAndBucketName(classificationResultDTO.getObjectKey(), bucketProcessed))
-                    .setOriginalFile(minioFileRepository.findByFilePathAndBucketName(rawFileKey, bucketRaw))
+                    .setFile(minioFileRepository.findByFilePathAndBucketName(processedFileKey, bucketProcessed))
+                    .setOriginalFile(minioFileRepository.findByFilePathAndBucketName(classificationResultDTO.getRawFileKey(), bucketRaw))
                     .setCreatedAt(LocalDateTime.now())
                     .setConfidence(classificationResultDTO.getConfidence())
-                    .setTool(toolRepository.findByName(microClass))
+                    .setTool(toolRepository.findByName(classificationResultDTO.getMicroClass()))
                     .setMarking(classificationResultDTO.getMarking());
 
             classificationResultRepository.save(classificationResult);

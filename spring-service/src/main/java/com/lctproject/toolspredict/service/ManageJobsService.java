@@ -13,7 +13,7 @@ public interface ManageJobsService {
 
     ClassificationResponseDTO sendToRecognition(String minioKey, Long jobId);
 
-    String sendToEnrichment(Long jobId, String rawFileKey, ClassificationResultDTO classificationResultDTO);
+    String sendToEnrichment(Long jobId, String rawFileKey, String processedFileKey);
 
     ResponseEntity<?> testModels(MultipartFile file);
 }
