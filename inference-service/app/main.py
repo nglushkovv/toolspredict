@@ -2,18 +2,21 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from minio import Minio
 from pydantic import BaseModel
-from typing import Dict, List
+from typing import Optional, Tuple, Any, Dict
 from io import BytesIO
-import random
 import json
 import os
+import re
+
 from PIL import Image
+import torch
+from transformers import AutoProcessor, AutoModelForCausalLM
 
 from app.config import settings
-from model import ModelService
 
 app = FastAPI()
 
+# MinIO client
 minio_client = Minio(
     settings.minio_endpoint,
     access_key=settings.minio_access_key,
@@ -21,127 +24,169 @@ minio_client = Minio(
     secure=False
 )
 
-class ProcessedFilesRequest(BaseModel):
-    packages: Dict[str, List[str]]
+# DTO
+class EnrichmentRequest(BaseModel):
+    raw_file_key: str
+    processed_file_key: str
 
+# Патч для отключения flash_attn в динамических импортерах HF (Florence-2)
+def _patch_hf_dynamic_imports():
+    try:
+        import transformers.dynamic_module_utils as dmu
+        _orig_get_imports = dmu.get_imports
 
-MICROCLASSES = {
-    1: ["Air Compressors - 50L, 2HP, Stanley", "Air Compressors - 100L, 3HP, Makita"],
-    2: ["Bearing - 6202, Steel, SKF", "Bearing - 6304, Chrome, NSK"],
-    3: ["Clamp - 100mm, Steel, Bessey", "Clamp - 200mm, Cast Iron, Irwin"],
-    4: ["Digital Caliper - 150mm, Metric/Imperial, Mitutoyo", "Digital Caliper - 200mm, Stainless Steel, Starrett"],
-    5: ["Digital Torque Wrench - 5-50 Nm, Metric, Snap-on", "Digital Torque Wrench - 20-200 Nm, Imperial, Tekton"],
-    6: ["Drill Bit - 6mm, Titanium, Bosch", "Drill Bit - 10mm, High-Speed Steel, Dewalt"],
-    7: ["Electric Drill - 18V, Cordless, Black & Decker", "Electric Drill - 750W, Corded, Makita"],
-    8: ["Fire Extinguisher - ABC, 6kg, Kidde", "Fire Extinguisher - CO2, 5kg, Gloria"],
-    9: ["First Aid Kit - 50 Pieces, Compact, Lifeline", "First Aid Kit - 100 Pieces, Large, Johnson & Johnson"],
-    10: ["Flashlight - LED, 800 Lumens, Maglite", "Flashlight - Rechargeable, 500 Lumens, Fenix"],
-    11: ["Metal Nut - M8, Stainless Steel, Hex", "Metal Nut - M10, Brass, Hex"],
-    12: ["Pliers - Needle Nose, Yellow Handle, Stanley", "Pliers - Slip Joint, Red Handle, Knipex"],
-    13: ["Safety Glasses - Clear Lens, Black Frame, 3M", "Safety Glasses - Tinted Lens, Blue Frame, Uvex"],
-    14: ["Safety Helmet - Yellow, ABS, MSA", "Safety Helmet - White, Polycarbonate, Honeywell"],
-    15: ["Screwdriver - Philips, Red Handle, Bosch", "Screwdriver - Flat, Blue Handle, Makita"],
-    16: ["Socket Wrench - 1/2\", Drive, Black, Craftsman", "Socket Wrench - 3/8\", Drive, Chrome, Dewalt"],
-    17: ["Tape Measure - 5m, 19mm Wide, Stanley", "Tape Measure - 8m, 25mm Wide, Komelon"],
-    18: ["Voltage Tester - Non-contact, LCD Display, Fluke", "Voltage Tester - Contact, Analog, Klein"],
-    19: ["Wirecutter - Diagonal, Red Handle, Knipex", "Wirecutter - End Cutting, Blue Handle, Irwin"],
-    20: ["Wrench - 10mm, Chrome, Beta", "Wrench - 15mm, Steel, Facom"]
-}
+        def patched_get_imports(filename):
+            imports = _orig_get_imports(filename)
+            try:
+                fn = str(filename)
+            except Exception:
+                fn = ""
+            if fn.endswith("modeling_florence2.py") and "flash_attn" in imports:
+                imports = [imp for imp in imports if imp != "flash_attn"]
+            return imports
 
-def save_results_json(job_id: str, data: dict):
-    result_key = f"{job_id}/result.json"
-    payload = json.dumps(data, ensure_ascii=False).encode("utf-8")
-    stream = BytesIO(payload)
-    minio_client.put_object(
-        bucket_name="bucket-results",
-        object_name=result_key,
-        data=stream,
-        length=len(payload),
-        content_type="application/json"
-    )
+        dmu.get_imports = patched_get_imports
+    except Exception:
+        # Если что-то пошло не так — просто продолжаем без патча (на CPU обычно ок)
+        pass
+
+# OCR сервис-обертка
+class OCRService:
+    def __init__(self, model_id: str = "microsoft/Florence-2-large"):
+        _patch_hf_dynamic_imports()
+
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            trust_remote_code=True,
+            torch_dtype=torch.float32  # CPU
+        ).eval()
+
+        self.processor = AutoProcessor.from_pretrained(
+            model_id,
+            trust_remote_code=True
+        )
+
+    def _process_model_output(self, text: str) -> Optional[str]:
+        """
+        Извлекает и форматирует код вида AT-XXXXXXX.
+        Если дефис перед последней цифрой отсутствует — добавляет.
+        """
+        match = re.search(r"AT-\d{7}", text)
+        if not match:
+            return None
+        code = match.group()  # например, 'AT-2882935'
+        # Превратить в 'AT-XXXXXX-X', если нет дефиса перед последней цифрой
+        if not re.match(r"AT-\d{6}-\d", code):
+            code = code[:-1] + "-" + code[-1]
+        return code
+
+    def run_ocr(self, image: Image.Image) -> Tuple[Optional[str], str]:
+        """
+        Возвращает (processed_marking, raw_output)
+        processed_marking может быть None, если ничего не найдено.
+        """
+        prompt = "<OCR>"
+        inputs = self.processor(text=prompt, images=image.convert("RGB"), return_tensors="pt")
+
+        with torch.no_grad():
+            generated_ids = self.model.generate(
+                input_ids=inputs["input_ids"],
+                pixel_values=inputs["pixel_values"],
+                max_new_tokens=1024,
+                early_stopping=False,
+                do_sample=False,
+                num_beams=3,
+            )
+
+        raw_output = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+        processed = self._process_model_output(raw_output)
+        return processed, raw_output
+
 
 def get_image_from_minio(bucket: str, object_name: str) -> Image.Image:
     resp = None
     try:
         resp = minio_client.get_object(bucket, object_name)
         data = resp.read()
-        img = Image.open(BytesIO(data))
+        img = Image.open(BytesIO(data)).convert("RGB")
         return img
     finally:
         if resp is not None:
             resp.close()
             resp.release_conn()
 
-def extract_job_id_from_key(key: str) -> str:
-    return key.split("/")[0] if "-" in key else "default"
+def get_json_from_minio(bucket: str, object_name: str) -> Dict[str, Any]:
+    resp = None
+    try:
+        resp = minio_client.get_object(bucket, object_name)
+        data = resp.read()
+        meta = json.loads(data.decode("utf-8"))
+        return meta
+    finally:
+        if resp is not None:
+            resp.close()
+            resp.release_conn()
 
+def extract_bbox(meta: Dict[str, Any]) -> Optional[Tuple[int, int, int, int]]:
+    """
+    Пытается извлечь bbox из meta.
+    Поддерживает форматы:
+    - {"bbox": [x1, y1, x2, y2]}
+    - {"bbox": {"x1":..., "y1":..., "x2":..., "y2":...}}
+    - {"bboxes": [[x1, y1, x2, y2], ...]} — берём первый
+    """
+    if "bbox" in meta:
+        bbox = meta["bbox"]
+        if isinstance(bbox, list) and len(bbox) == 4:
+            return tuple(int(v) for v in bbox)
+        if isinstance(bbox, dict):
+            keys = ["x1", "y1", "x2", "y2"]
+            if all(k in bbox for k in keys):
+                return tuple(int(bbox[k]) for k in keys)
+    if "bboxes" in meta and isinstance(meta["bboxes"], list) and meta["bboxes"]:
+        first = meta["bboxes"][0]
+        if isinstance(first, list) and len(first) == 4:
+            return tuple(int(v) for v in first)
+    return None
 
 @app.on_event("startup")
 def load_model_on_startup():
-    model_dir = "model"
-    weights_path = os.path.join(model_dir, "best_resnet_model.pth")
-    classes_order_path = os.path.join(model_dir, "class_to_idx.json")
-    classes_txt_path = os.path.join(model_dir, "classes.txt")
+    app.state.ocr_service = OCRService()
+    print("OCR модель успешно загружена и готова к работе")
 
-    app.state.model_service = ModelService(
-        weights_path=weights_path,
-        classes_order_path=classes_order_path if os.path.exists(classes_order_path) else None,
-        fallback_classes_txt=classes_txt_path if os.path.exists(classes_txt_path) else None,
-    )
-    print("Модель успешно загружена и готова к работе")
-
-
-@app.post("/classify")
-async def classify(request: ProcessedFilesRequest):
-    results = {}
-    input_bucket = getattr(settings, "minio_bucket_processed")
+@app.post("/enrich")
+async def enrich(request: EnrichmentRequest):
     raw_bucket = getattr(settings, "minio_bucket_raw")
-    model_service: ModelService = app.state.model_service
+    processed_bucket = getattr(settings, "minio_bucket_processed")
 
-    for raw_file, processed_files in request.packages.items():
-        results[raw_file] = {}
-        for p_file in processed_files:
-            try:
-                resp = minio_client.get_object(input_bucket, p_file)
-                data = resp.read()
-                resp.close()
-                resp.release_conn()
-                meta = json.loads(data.decode("utf-8"))
+    try:
+        # 1) Читаем картинку
+        img = get_image_from_minio(raw_bucket, request.raw_file_key)
 
-                source_key = meta["source_image_key"]
-                bbox = meta["bbox"]
+        # 2) Читаем метаданные (processed JSON) и пытаемся взять bbox
+        meta = get_json_from_minio(processed_bucket, request.processed_file_key)
+        bbox = extract_bbox(meta)
 
-                img = get_image_from_minio(raw_bucket, source_key)
-                cropped = img.crop((bbox[0], bbox[1], bbox[2], bbox[3]))
+        # 3) Кроп, если есть bbox
+        if bbox is not None:
+            x1, y1, x2, y2 = bbox
+            # Защита от невалидных значений
+            w, h = img.size
+            x1 = max(0, min(x1, w))
+            x2 = max(0, min(x2, w))
+            y1 = max(0, min(y1, h))
+            y2 = max(0, min(y2, h))
+            if x2 > x1 and y2 > y1:
+                img = img.crop((x1, y1, x2, y2))
 
-                macro_name, macro_id, conf = model_service.predict_pil(cropped)
-                micro_candidates = MICROCLASSES.get(macro_id, None)
-                if micro_candidates:
-                    microclass = random.choice(micro_candidates)
-                else:
-                    microclass = "Unknown"
+        # 4) OCR
+        ocr_service: OCRService = app.state.ocr_service
+        marking, _raw = ocr_service.run_ocr(img)
 
-                result_entry = {
-                    "macroclass": macro_name,
-                    "macroclass_id": macro_id,
-                    "microclass": microclass,
-                    "confidence": round(conf, 4)
-                }
-            except Exception as e:
-                result_entry = {
-                    "macroclass": "Unknown",
-                    "macroclass_id": None,
-                    "microclass": "Unknown",
-                    "confidence": 0.0,
-                    "error": str(e)
-                }
-
-            results[raw_file][p_file] = result_entry
-
-    first_raw = next(iter(request.packages))
-    job_id = extract_job_id_from_key(first_raw)
-    save_results_json(job_id, results)
-    return JSONResponse(content={"status": "ok", "results": results})
+        return JSONResponse(content={"marking": marking})
+    except Exception as e:
+        # В случае любой ошибки — возвращаем marking: null
+        return JSONResponse(content={"marking": None})
 
 if __name__ == "__main__":
     import uvicorn
