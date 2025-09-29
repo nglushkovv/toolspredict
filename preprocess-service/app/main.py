@@ -87,7 +87,7 @@ async def preprocess(key: str = Query(..., description="Ключ файла в M
                     content_type="application/json"
                 )
 
-                preprocess_results["object_key"] = {
+                preprocess_results[object_key] = {
                     "microClass": micro_class,
                     "confidence": conf,
                     "bbox": xyxy,
