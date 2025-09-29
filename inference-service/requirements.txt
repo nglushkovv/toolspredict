@@ -16,4 +16,6 @@ minio
 pydantic
 python-dotenv
 pydantic-settings
-numpy 
+numpy
+einops
+timm
