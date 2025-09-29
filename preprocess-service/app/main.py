@@ -27,30 +27,6 @@ minio_client = Minio(
     secure=False
 )
 
-PARENT_CLASSES = [
-    "Screwdriver",
-    "Pliers",
-    "Wrench",
-    "Socket Wrench",
-    "Digital Torque Wrench",
-    "Voltage Tester",
-    "Digital Caliper",
-    "Drill Bit",
-    "Electric Drill",
-    "Tape Measure",
-    "Flashlight",
-    "Safety Glasses",
-    "Safety Helmet",
-    "Wirecutter",
-    "Clamp",
-    "Air Compressors",
-    "Fire Extinguisher",
-    "First AID Kit",
-    "Metal Nut",
-    "Bearing"
-]
-
-
 @app.post("/preprocess")
 async def preprocess(key: str = Query(..., description="Ключ файла в Minio")):
     bucket_raw = settings.minio_bucket_raw
@@ -71,7 +47,7 @@ async def preprocess(key: str = Query(..., description="Ключ файла в M
 
         if ext in [".jpg", ".jpeg", ".png"]:
             img = Image.open(BytesIO(file_data)).convert('RGB')
-            results = yolo_model(img)
+            results = yolo_model(img, conf=0.5, iou=0.5)
 
             if len(results[0].boxes) == 0:
                 raise HTTPException(
@@ -86,15 +62,15 @@ async def preprocess(key: str = Query(..., description="Ключ файла в M
                 class_id = int(box.cls[0])
                 conf = float(box.conf[0])
                 xyxy = [float(x) for x in box.xyxy[0].tolist()]
-                macro_class = yolo_model.names[class_id]
+                micro_class = yolo_model.names[class_id]
                 base_key = os.path.splitext(key)[0]
-                object_key = f"{base_key}/{macro_class}_{i}.json"
+                object_key = f"{base_key}/{micro_class}_{i}.json"
 
                 detection_obj = {
                     "source_image_key": key,
                     "object_key": object_key,
                     "class_id": class_id,
-                    "macro_class": macro_class,
+                    "micro_class": micro_class,
                     "confidence": conf,
                     "bbox": xyxy,
                     "timestamp": datetime.utcnow().isoformat() + "Z"
@@ -111,7 +87,11 @@ async def preprocess(key: str = Query(..., description="Ключ файла в M
                     content_type="application/json"
                 )
 
-                preprocess_results[f"{macro_class}_{i}"] = object_key
+                preprocess_results["object_key"] = {
+                    "microClass": micro_class,
+                    "confidence": conf,
+                    "bbox": xyxy,
+                }
                 sizes.append(f"{len(data_bytes) // 1024}KB")
         else:
             raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
