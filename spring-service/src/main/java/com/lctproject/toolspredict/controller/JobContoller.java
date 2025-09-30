@@ -39,9 +39,11 @@ public class JobContoller {
     public ResponseEntity<?> uploadFile(@Parameter(description = "Фото/Видео для обработки и построения прогноза")
                                              @RequestParam("file") MultipartFile file,
                                              @Parameter(description = "id процесса")
-                                             @PathVariable Long jobId) {
+                                             @PathVariable Long jobId,
+                                             @Parameter(description = "Стоит ли выполнять поиск маркировок? Внимание: время распознавания сильно увеличится.")
+                                            @RequestParam(value = "searchMarking", defaultValue = "false") boolean searchMarking) {
         try {
-            return ResponseEntity.ok(manageJobsService.processFile(file, jobId));
+            return ResponseEntity.ok(manageJobsService.processFile(file, jobId, searchMarking));
         } catch (NoSuchElementException ex) {
             return new ResponseEntity<>("Модели не удалось распознать инструменты на фото.", HttpStatus.UNPROCESSABLE_ENTITY);
         } catch (Exception e) {

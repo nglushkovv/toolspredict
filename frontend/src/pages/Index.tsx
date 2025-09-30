@@ -27,6 +27,7 @@ interface JobData {
 
 interface TestJobData {
   jobId: number;
+  searchMarking: boolean;
 }
 
 // Empty initial orders - will be loaded from API
@@ -68,8 +69,13 @@ const Index = () => {
           // Если это testResults, проверяем что testJobData валидный
           if (parsed.currentView === 'testResults') {
             if (parsed.testJobData && typeof parsed.testJobData.jobId === 'number') {
+              // Если searchMarking отсутствует, устанавливаем значение по умолчанию
+              const testJobData = {
+                jobId: parsed.testJobData.jobId,
+                searchMarking: typeof parsed.testJobData.searchMarking === 'boolean' ? parsed.testJobData.searchMarking : false
+              };
               setCurrentView(parsed.currentView);
-              setTestJobData(parsed.testJobData);
+              setTestJobData(testJobData);
             } else {
               console.log('Invalid testJobData, staying on orders view');
               setCurrentView("orders");
@@ -230,9 +236,9 @@ const Index = () => {
     setCurrentView("orders");
   };
 
-  const handleNextFromTestModel = (jobId: number) => {
-    console.log('Setting testJobData with jobId:', jobId);
-    setTestJobData({ jobId });
+  const handleNextFromTestModel = (jobId: number, searchMarking: boolean) => {
+    console.log('Setting testJobData with jobId:', jobId, 'searchMarking:', searchMarking);
+    setTestJobData({ jobId, searchMarking });
     setCurrentView("testResults");
   };
 
@@ -247,6 +253,7 @@ const Index = () => {
     });
     handleBackToOrders();
   };
+
 
   const handleNextFromDetails = async () => {
     if (!selectedOrder) return;
@@ -317,10 +324,7 @@ const Index = () => {
 
   const handleNextFromUpload = (files: UploadedFile[]) => {
     setUploadedFiles(files);
-    // Set status to VALIDATION and open results immediately
-    if (jobData) {
-      apiService.updateJobStatus(jobData.jobId, 'VALIDATION').catch(() => {});
-    }
+    // Переходим сразу к результатам, так как обработка уже выполнена
     setCurrentView("results");
   };
 
@@ -472,6 +476,7 @@ const Index = () => {
         return (
           <TestModelResults
             jobId={testJobData.jobId}
+            searchMarking={testJobData.searchMarking}
             onBack={handleBackFromTestResults}
             onComplete={handleCompleteTestModel}
           />
@@ -500,15 +505,10 @@ const Index = () => {
           <div>Order: {selectedOrderId || 'none'}</div>
           <div>TestJob: {testJobData?.jobId || 'none'}</div>
           <button 
-            onClick={() => {
-              setCurrentView("orders");
-              setSelectedOrderId(null);
-              setJobData(null);
-              setTestJobData(null);
-            }}
+            onClick={handleEmergencyReset}
             className="bg-red-500 px-2 py-1 rounded mt-1 mr-1"
           >
-            Reset
+            Emergency Reset
           </button>
           <button 
             onClick={() => {

@@ -31,7 +31,7 @@ public class ManageJobsServiceImpl implements ManageJobsService {
     private String bucketProcessed;
 
     @Override
-    public String processFile(MultipartFile file, Long jobId) {
+    public String processFile(MultipartFile file, Long jobId, boolean searchMarking) {
         String result;
         String rawFileKey = addRawFile(file, jobId);
         if (rawFileKey.substring(rawFileKey.lastIndexOf('.')+1).equals("mp4")) {
@@ -41,7 +41,7 @@ public class ManageJobsServiceImpl implements ManageJobsService {
             for (Map.Entry<String, String> entry: response.getResults().entrySet()) {
                 try {
                     ClassificationResponseDTO classificationResponseDTO = sendToRecognition(entry.getValue(), jobId);
-                    handleClassificationResponse(classificationResponseDTO, jobId, entry.getValue(), true);
+                    handleClassificationResponse(classificationResponseDTO, jobId, entry.getValue(), searchMarking);
                     countSaved++;
                     builder.append(entry.getValue()).append(": ").append("OK").append("\n");
                 } catch (NoSuchElementException e) {
@@ -56,7 +56,7 @@ public class ManageJobsServiceImpl implements ManageJobsService {
             return builder.toString();
         } else {
             ClassificationResponseDTO response = sendToRecognition(rawFileKey, jobId);
-            handleClassificationResponse(response, jobId, rawFileKey, true);
+            handleClassificationResponse(response, jobId, rawFileKey, searchMarking);
             return "OK";
         }
     }

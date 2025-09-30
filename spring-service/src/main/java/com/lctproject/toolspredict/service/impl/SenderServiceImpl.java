@@ -29,7 +29,7 @@ public class SenderServiceImpl implements SenderService {
     public ResponseEntity<ClassificationResponseDTO> sendToRecognition(String minioKey) {
         try {
             log.info("Отправка ключа файла в сервис предобработки...");
-            String url = UriComponentsBuilder.fromUriString(preprocessServiceUrl + "/preprocess")
+            String url = UriComponentsBuilder.fromUriString(preprocessServiceUrl + "/recognize")
                     .queryParam("key", minioKey)
                     .toUriString();
             ResponseEntity<ClassificationResponseDTO> response = restTemplate.postForEntity(url, null, ClassificationResponseDTO.class);
@@ -55,7 +55,7 @@ public class SenderServiceImpl implements SenderService {
     @Override
     public ResponseEntity<EnrichmentResponse> sendToEnrichment(EnrichmentRequest request) {
         try {
-            ResponseEntity<EnrichmentResponse> response = restTemplate.postForEntity(inferenceServiceUrl + "/classify",
+            ResponseEntity<EnrichmentResponse> response = restTemplate.postForEntity(inferenceServiceUrl + "/enrich",
                     request, EnrichmentResponse.class);
             if (response.getStatusCode().is2xxSuccessful()) {
                 log.info("Успешно получены микроклассы от inference-сервиса");

@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Upload, File, X, Play, AlertTriangle, CheckCircle } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ArrowLeft, Upload, File, X, AlertTriangle, CheckCircle, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiService, ApiError } from "@/lib/api";
@@ -26,12 +26,12 @@ interface FileUploadProps {
 
 export const FileUpload = ({ orderNumber, actionType, jobId, onBack, onNext }: FileUploadProps) => {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [processingProgress, setProcessingProgress] = useState(0);
   const [loadingFiles, setLoadingFiles] = useState(true);
   const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
   const [recognitionReady, setRecognitionReady] = useState(false);
+  const [searchMarking, setSearchMarking] = useState(false);
   const [processedCount, setProcessedCount] = useState(0);
+  const [processingFiles, setProcessingFiles] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -53,48 +53,56 @@ export const FileUpload = ({ orderNumber, actionType, jobId, onBack, onNext }: F
     return problematicFiles;
   };
 
-  // Function to reload files from API and mark preprocess status
+  // Function to reload files from API and check classification status
   const reloadFilesFromAPI = async () => {
-    const [apiFiles, preprocess] = await Promise.all([
+    const [apiFiles, classificationResults] = await Promise.all([
       apiService.getJobFiles(jobId, 'RAW'),
-      apiService.getPreprocessResults(jobId).catch(() => []),
+      apiService.getDetailedResults(jobId).catch(() => []),
     ]);
-    // Build set of successfully preprocessed original fileIds
-    const okOriginalIds = new Set<number>();
-    if (Array.isArray(preprocess)) {
-      preprocess.forEach((p: any) => {
-        const originalId = p.originalFile?.id;
-        if (typeof originalId === 'number') okOriginalIds.add(originalId);
+    
+    // Build set of successfully classified original fileIds
+    const classifiedOriginalIds = new Set<number>();
+    if (Array.isArray(classificationResults)) {
+      classificationResults.forEach((result: any) => {
+        const originalId = result.originalFile?.id;
+        if (typeof originalId === 'number') classifiedOriginalIds.add(originalId);
       });
     }
+    
     const transformedFiles: UploadedFile[] = apiFiles.map(apiFile => {
       const isVideo = apiFile.fileName?.toLowerCase().endsWith('.mp4');
+      const isClassified = classifiedOriginalIds.has(apiFile.id);
+      
       if (isVideo) {
+        // Видео считается обработанным, если его кадры есть в результатах классификации
         return {
           id: apiFile.id.toString(),
           name: apiFile.fileName,
           size: 0,
           uploadDate: new Date(apiFile.createdAt),
-          status: "uploaded" as const,
+          status: isClassified ? ("processed" as const) : ("uploaded" as const),
         };
       }
-      const ok = okOriginalIds.has(apiFile.id);
+      
+      // Обычные файлы
       return {
         id: apiFile.id.toString(),
         name: apiFile.fileName,
         size: 0,
         uploadDate: new Date(apiFile.createdAt),
-        status: ok ? ("processed" as const) : ("error" as const),
-        errorMessage: ok ? undefined : "Не распознано на предобработке",
+        status: isClassified ? ("processed" as const) : ("error" as const),
+        errorMessage: isClassified ? undefined : "Не удалось распознать инструменты",
       };
     });
     
     setUploadedFiles(transformedFiles);
     const newProcessedCount = transformedFiles.filter(f => f.status === 'processed').length;
-    // если после загрузки появился новый успешно предобработанный файл — разрешаем повторный запуск
-    if (recognitionReady && newProcessedCount > processedCount) {
-      setRecognitionReady(false);
+    
+    // Если есть хотя бы один обработанный файл, разрешаем переход к результатам
+    if (newProcessedCount > 0) {
+      setRecognitionReady(true);
     }
+    
     setProcessedCount(newProcessedCount);
     return transformedFiles;
   };
@@ -199,12 +207,21 @@ export const FileUpload = ({ orderNumber, actionType, jobId, onBack, onNext }: F
     };
 
     setUploadedFiles(prev => [...prev, newFile]);
+    setProcessingFiles(prev => new Set(prev).add(newFile.id));
 
     try {
-      await apiService.uploadFile(jobId, file);
+      await apiService.uploadFile(jobId, file, searchMarking);
+      
+      // Сбрасываем чекбокс после успешной загрузки
+      setSearchMarking(false);
       
       // Remove the temporary file from state
       setUploadedFiles(prev => prev.filter(f => f.id !== newFile.id));
+      setProcessingFiles(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(newFile.id);
+        return newSet;
+      });
       
       // For video files, wait a bit for server processing and retry loading files
       const isVideoFile = file.type === 'video/mp4' || file.name.toLowerCase().endsWith('.mp4');
@@ -214,7 +231,7 @@ export const FileUpload = ({ orderNumber, actionType, jobId, onBack, onNext }: F
         await loadFilesWithRetry();
         toast({
           title: "Видео загружено",
-          description: `${file.name} загружено. Предобработка кадров выполняется...`,
+          description: `${file.name} загружено. Обработка выполняется...`,
           variant: "default",
         });
       } else {
@@ -222,7 +239,7 @@ export const FileUpload = ({ orderNumber, actionType, jobId, onBack, onNext }: F
         await reloadFilesFromAPI();
         toast({
           title: "Файл загружен",
-          description: `${file.name} успешно загружен`,
+          description: `${file.name} успешно загружен и обработан`,
         });
       }
     } catch (error) {
@@ -266,13 +283,18 @@ export const FileUpload = ({ orderNumber, actionType, jobId, onBack, onNext }: F
         }
       }
       
-      // If single photo failed preprocess (422), show it with error state immediately
+      // If single photo failed classification (422), show it with error state immediately
       if (error instanceof ApiError && error.status === 422 && !isVideoFile) {
         setUploadedFiles(prev => prev.map(f => (
           f.id === newFile.id
-            ? { ...f, status: "error" as const, errorMessage: "Не распознано на предобработке" }
+            ? { ...f, status: "error" as const, errorMessage: "Не удалось распознать инструменты" }
             : f
         )));
+        setProcessingFiles(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(newFile.id);
+          return newSet;
+        });
         // Try to refresh from API to replace temp with actual stored entry if present
         reloadFilesFromAPI().catch(() => {});
         return; // do not show destructive toast
@@ -309,6 +331,11 @@ export const FileUpload = ({ orderNumber, actionType, jobId, onBack, onNext }: F
       
       // For other errors: remove temp and show error
       setUploadedFiles(prev => prev.filter(f => f.id !== newFile.id));
+      setProcessingFiles(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(newFile.id);
+        return newSet;
+      });
       toast({
         title: "Ошибка загрузки",
         description: errorMessage,
@@ -370,64 +397,6 @@ export const FileUpload = ({ orderNumber, actionType, jobId, onBack, onNext }: F
     }
   };
 
-  const handleStartRecognition = async () => {
-    if (uploadedFiles.length === 0) {
-      toast({
-        title: "Нет файлов",
-        description: "Загрузите хотя бы один файл для начала распознавания",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsProcessing(true);
-    setProcessingProgress(0);
-    
-    try {
-      await apiService.startClassification(jobId);
-      toast({ title: "Распознавание запущено" });
-
-      // Вернуть красивую прогресс-полоску (симуляция), статусы не меняем
-      const interval = setInterval(() => {
-        setProcessingProgress(prev => {
-          if (prev >= 100) {
-            clearInterval(interval);
-            setIsProcessing(false);
-            setRecognitionReady(true);
-            return 100;
-          }
-          return prev + 10;
-        });
-      }, 300);
-    } catch (error) {
-      setIsProcessing(false);
-      setProcessingProgress(0);
-      
-      let errorMessage = "Не удалось начать обработку файлов";
-      
-      if (error instanceof ApiError) {
-        switch (error.status) {
-          case 400:
-            errorMessage = "Сервис распознавания недоступен. Попробуйте позже.";
-            break;
-          case 422:
-            errorMessage = "Не удалось распознать инструменты на фото. Проверьте качество изображения.";
-            break;
-          case 404:
-            errorMessage = "Задача обработки не найдена. Обновите страницу и попробуйте снова.";
-            break;
-          default:
-            errorMessage = error.message;
-        }
-      }
-      
-      toast({
-        title: "Ошибка распознавания",
-        description: errorMessage,
-        variant: "destructive",
-      });
-    }
-  };
 
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
@@ -438,8 +407,8 @@ export const FileUpload = ({ orderNumber, actionType, jobId, onBack, onNext }: F
   };
 
   const hasAtLeastOneProcessedFrame = uploadedFiles.some(file => file.status === "processed");
-  // Переход "Далее" доступен после старта распознавания
-  const canProceedToNext = recognitionReady;
+  // Переход "Далее" доступен только если есть хотя бы один обработанный файл
+  const canProceedToNext = hasAtLeastOneProcessedFrame;
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -477,8 +446,27 @@ export const FileUpload = ({ orderNumber, actionType, jobId, onBack, onNext }: F
               <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-lg font-medium mb-2">Выберите файл для загрузки</p>
               <p className="text-sm text-muted-foreground mb-4">
-                Поддерживаются: JPG, PNG, MP4 (максимум 2 ГБ). Для старта распознавания нужен хотя бы один успешно предобработанный кадр.
+                Поддерживаются: JPG, PNG, MP4 (максимум 2 ГБ). Файлы автоматически обрабатываются после загрузки.
               </p>
+              
+              {/* Настройки обработки */}
+              <div className="mb-4 flex items-center justify-center space-x-2">
+                <Checkbox 
+                  id="searchMarking" 
+                  checked={searchMarking}
+                  onCheckedChange={(checked) => setSearchMarking(checked === true)}
+                />
+                <label 
+                  htmlFor="searchMarking" 
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  Распознавать маркировку
+                </label>
+                <span className="text-xs text-muted-foreground">
+                  ({searchMarking ? '~10 сек/инструмент' : '~2 сек/инструмент'})
+                </span>
+              </div>
+
               <input
                 ref={fileInputRef}
                 type="file"
@@ -488,7 +476,7 @@ export const FileUpload = ({ orderNumber, actionType, jobId, onBack, onNext }: F
               />
               <Button 
                 onClick={() => fileInputRef.current?.click()}
-                disabled={isProcessing}
+                disabled={processingFiles.size > 0}
               >
                 Выбрать файл
               </Button>
@@ -511,35 +499,16 @@ export const FileUpload = ({ orderNumber, actionType, jobId, onBack, onNext }: F
               <CardTitle className="flex items-center justify-between">
                 Загруженные файлы ({uploadedFiles.length})
                 <div className="flex items-center gap-3">
-                  {recognitionReady && (
+                  {hasAtLeastOneProcessedFrame && (
                     <Badge className="flex items-center gap-1 bg-success text-success-foreground">
-                      <CheckCircle className="h-4 w-4" /> Успех
+                      <CheckCircle className="h-4 w-4" /> Готово к просмотру
                     </Badge>
-                  )}
-                  {!isProcessing && uploadedFiles.some(file => file.status === "processed") && (
-                    <Button 
-                      onClick={handleStartRecognition}
-                      className="flex items-center space-x-2"
-                      disabled={recognitionReady}
-                    >
-                      <Play className="h-4 w-4" />
-                      <span>Начать распознавание</span>
-                    </Button>
                   )}
                 </div>
               </CardTitle>
             </CardHeader>
             
             <CardContent>
-              {isProcessing && (
-                <div className="mb-6">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium">Обработка файлов...</span>
-                    <span className="text-sm text-muted-foreground">{processingProgress}%</span>
-                  </div>
-                  <Progress value={processingProgress} className="w-full" />
-                </div>
-              )}
               
               <div className="space-y-3">
                 {uploadedFiles.map((file) => (
@@ -562,20 +531,26 @@ export const FileUpload = ({ orderNumber, actionType, jobId, onBack, onNext }: F
                     </div>
                     
                     <div className="flex items-center space-x-2">
-                      {file.status === "uploaded" && (
+                      {file.status === "uploaded" && file.name?.toLowerCase().endsWith('.mp4') && (
+                        <span className="text-sm text-muted-foreground">Видео загружено</span>
+                      )}
+                      {file.status === "uploaded" && !file.name?.toLowerCase().endsWith('.mp4') && (
                         <span className="text-sm text-muted-foreground">Загружен</span>
                       )}
                       {file.status === "processing" && (
                         <span className="text-sm text-warning">Обработка...</span>
                       )}
-                      {file.status === "processed" && (
+                      {file.status === "processed" && file.name?.toLowerCase().endsWith('.mp4') && (
+                        <span className="text-sm text-success">Видео обработано</span>
+                      )}
+                      {file.status === "processed" && !file.name?.toLowerCase().endsWith('.mp4') && (
                         <span className="text-sm text-success">Обработан</span>
                       )}
                       {file.status === "error" && (
                         <span className="text-sm text-destructive">Ошибка распознавания</span>
                       )}
                       
-                      {!isProcessing && (
+                      {processingFiles.size === 0 && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -604,7 +579,7 @@ export const FileUpload = ({ orderNumber, actionType, jobId, onBack, onNext }: F
             className="px-8"
             disabled={!canProceedToNext}
           >
-            Продолжить
+{canProceedToNext ? "Просмотреть результаты" : "Загрузите файлы"}
           </Button>
         </div>
       </div>

@@ -16,7 +16,6 @@ interface OrderDetailsProps {
 interface OrderItem {
   id: number;
   toolName: string;
-  toolReference: string;
   toolId: number;
   marking?: string; // маркировка инструмента
 }
@@ -40,7 +39,6 @@ export const OrderDetails = ({ order, actionType, onBack, onNext }: OrderDetails
         const transformedItems = response?.map((apiOrderTool) => ({
           id: apiOrderTool.id,
           toolName: apiOrderTool.tool.name,
-          toolReference: apiOrderTool.tool.toolReference.toolName,
           toolId: apiOrderTool.tool.id,
           marking: apiOrderTool.marking // маркировка из заказа
         })) || [];
@@ -144,7 +142,6 @@ export const OrderDetails = ({ order, actionType, onBack, onNext }: OrderDetails
                   <div key={item.id} className="flex items-center justify-between p-3 border rounded-lg">
                     <div>
                       <p className="font-medium">{item.toolName}</p>
-                      <p className="text-sm text-muted-foreground">Тип: {item.toolReference}</p>
                       {item.marking && (
                         <p className="text-sm text-muted-foreground">
                           Маркировка: <span className="font-medium text-primary">{item.marking}</span>
