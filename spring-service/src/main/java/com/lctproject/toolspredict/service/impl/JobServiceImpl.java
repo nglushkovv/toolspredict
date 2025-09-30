@@ -109,9 +109,6 @@ public class JobServiceImpl implements JobService {
 
     @Override
     public Job createTestJob() {
-        processingJobsRepository.findFirstByStatus("TEST")
-                .ifPresent(job -> deleteJob(job.getId()));
-
         Job job = new Job()
            .setStatus("TEST")
            .setCreateDate(LocalDateTime.now());
