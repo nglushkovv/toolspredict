@@ -77,6 +77,10 @@ class OCRService:
         match = re.search(r"AT-\d{6}-\d", text)
         if match:
             return match.group()
+        
+        match = re.search(r"AT-\d{6}", text)
+        if match:
+            return match.group()
 
         match = re.search(r"AT-\d{7}", text)
         if match:
