@@ -33,5 +33,5 @@ jobs:
             git reset --hard origin/develop
 
             echo "Building and restarting all services..."
-            docker compose -p build
-            docker compose -p up -d
+            docker compose build
+            docker compose up -d
