@@ -42,9 +42,9 @@ services:
       - postgres
       - minio
 
-  preprocess-service:
-    build: ./preprocess-service
-    container_name: preprocess-service
+  recognition-service:
+    build: ./recognition-service
+    container_name: recognition-service
     environment:
       - MINIO_ENDPOINT=minio:9000
       - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
@@ -52,13 +52,13 @@ services:
       - MINIO_BUCKET_RAW=bucket-raw
       - MINIO_BUCKET_PROCESSED=bucket-processed
       - MINIO_BUCKET_RESULTS=bucket-results
-      - PORT=${PREPROCESS_PORT:-8001}
+      - PORT=${RECOGNITION_PORT_PORT:-8001}
     ports:
-      - "${PREPROCESS_PORT:-8001}:8001"
+      - "${RECOGNITION_PORT:-8001}:8001"
 
-  inference-service:
-    build: ./inference-service
-    container_name: inference-service
+  enrichment-service:
+    build: ./enrichment-service
+    container_name: enrichment-service
     environment:
       - MINIO_ENDPOINT=minio:9000
       - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
@@ -66,9 +66,9 @@ services:
       - MINIO_BUCKET_RAW=bucket-raw
       - MINIO_BUCKET_PROCESSED=bucket-processed
       - MINIO_BUCKET_RESULTS=bucket-results
-      - PORT=${INFERENCE_PORT:-8002}
+      - PORT=${ENRICHMENT_PORT:-8002}
     ports:
-      - "${INFERENCE_PORT:-8002}:8002"
+      - "${ENRICHMENT_PORT:-8002}:8002"
   frontend:
       build:
         context: ./frontend
