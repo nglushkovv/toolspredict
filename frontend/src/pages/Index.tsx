@@ -248,6 +248,46 @@ const Index = () => {
     setCurrentView("testModel");
   };
 
+  const handleCreateStandardOrder = async () => {
+    try {
+      setLoading(true);
+      await apiService.createStandardOrder();
+      
+      toast({
+        title: "Заказ создан",
+        description: "Стандартный заказ успешно создан",
+      });
+      
+      // Перезагружаем список заказов
+      await loadOrders();
+    } catch (error) {
+      console.error('Failed to create standard order:', error);
+      
+      let errorMessage = "Не удалось создать стандартный заказ";
+      
+      if (error instanceof ApiError) {
+        switch (error.status) {
+          case 400:
+            errorMessage = "Некорректные данные заказа";
+            break;
+          case 500:
+            errorMessage = "Внутренняя ошибка сервера";
+            break;
+          default:
+            errorMessage = error.message;
+        }
+      }
+      
+      toast({
+        title: "Ошибка",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleBackFromTestModel = () => {
     setCurrentView("orders");
   };
@@ -430,6 +470,7 @@ const Index = () => {
             onReturn={handleReturnOrder}
             onRequestOrders={handleRequestOrders}
             onTestModel={handleTestModel}
+            onCreateStandardOrder={handleCreateStandardOrder}
             orders={orders}
             loading={loading}
             loadingMore={loadingMore}

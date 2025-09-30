@@ -20,6 +20,7 @@ interface OrdersListProps {
   onReturn: (orderId: string) => void;
   onRequestOrders: () => void;
   onTestModel: () => void;
+  onCreateStandardOrder: () => void;
   orders: Order[];
   loading?: boolean;
   loadingMore?: boolean;
@@ -41,7 +42,7 @@ const getStatusBadge = (status: Order["status"]) => {
   }
 };
 
-export const OrdersList = ({ onIssue, onReturn, onRequestOrders, onTestModel, orders, loading = false, loadingMore = false, hasMore = false, onLoadMore }: OrdersListProps) => {
+export const OrdersList = ({ onIssue, onReturn, onRequestOrders, onTestModel, onCreateStandardOrder, orders, loading = false, loadingMore = false, hasMore = false, onLoadMore }: OrdersListProps) => {
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -70,6 +71,13 @@ export const OrdersList = ({ onIssue, onReturn, onRequestOrders, onTestModel, or
         </div>
         
         <div className="flex space-x-3">
+          <Button 
+            onClick={onCreateStandardOrder}
+            variant="outline"
+            className="border-green-500 text-green-600 hover:bg-green-500 hover:text-white"
+          >
+            Создать стандартный заказ
+          </Button>
           <Button 
             onClick={onTestModel}
             variant="outline"

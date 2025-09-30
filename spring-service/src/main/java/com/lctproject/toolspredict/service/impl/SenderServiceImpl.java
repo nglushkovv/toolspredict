@@ -16,9 +16,9 @@ import java.util.NoSuchElementException;
 @Service
 public class SenderServiceImpl implements SenderService {
     private final RestTemplate restTemplate;
-    @Value("${integrations.services.url.preprocess}")
+    @Value("${integrations.services.url.recognition}")
     private String preprocessServiceUrl;
-    @Value("${integrations.services.url.inference}")
+    @Value("${integrations.services.url.enrichment}")
     private String inferenceServiceUrl;
 
     public SenderServiceImpl() {

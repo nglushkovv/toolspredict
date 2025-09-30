@@ -89,6 +89,16 @@ export interface ApiOrderTool {
   marking?: string;
 }
 
+export interface ApiCreateStandardOrderRequest {
+  orderId: string;
+  employeeId: number;
+  tools: Array<{
+    id: number;
+    marking: string;
+  }>;
+  description: string;
+}
+
 export interface ApiOrderToolsResponse {
   content: ApiOrderTool[];
   totalElements: number;
@@ -198,6 +208,32 @@ class ApiService {
       body: JSON.stringify(orderData),
     });
     return response.text();
+  }
+
+  async createStandardOrder(): Promise<void> {
+    // Генерируем случайный UUID
+    const orderId = crypto.randomUUID();
+    
+    // Генерируем случайный employeeId от 1 до 3
+    const employeeId = Math.floor(Math.random() * 3) + 1;
+    
+    // Создаем массив из 11 инструментов с id от 1 до 11
+    const tools = Array.from({ length: 11 }, (_, index) => ({
+      id: index + 1,
+      marking: `marking_${index + 1}`
+    }));
+
+    const orderData: ApiCreateStandardOrderRequest = {
+      orderId,
+      employeeId,
+      tools,
+      description: "Стандартный заказ"
+    };
+
+    await this.makeRequest(`${API_BASE_URL}/orders`, {
+      method: 'POST',
+      body: JSON.stringify(orderData),
+    });
   }
 
   // Jobs
