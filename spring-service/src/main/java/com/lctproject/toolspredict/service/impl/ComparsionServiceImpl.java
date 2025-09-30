@@ -52,7 +52,7 @@ public class ComparsionServiceImpl implements ComparsionService {
         if (isEqual) {
             return ResponseEntity.ok("Полное совпадение с заказанным набором.");
         } else {
-            jobService.updateStatus(job.getId(), JobStatus.MANUAL_MAPPING_IS_REQUIRED);
+            if (!job.getStatus().equals("TEST")) jobService.updateStatus(job.getId(), JobStatus.MANUAL_MAPPING_IS_REQUIRED);
             return ResponseEntity.ok("Обнаружены расхождения. Требуется ручная разметка.");
         }
     }

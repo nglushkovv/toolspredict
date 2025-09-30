@@ -186,4 +186,10 @@ public class MinioFileServiceImpl implements MinioFileService {
         return result;
     }
 
+    @Override
+    public String getUrl(Long fileId) {
+        MinioFile minioFile = minioFileRepository.findById(fileId).orElseThrow();
+        return minioService.generatePresignedUrl(minioFile.getBucketName(), minioFile.getFilePath(), 900);
+    }
+
 }

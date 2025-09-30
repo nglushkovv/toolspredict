@@ -1,5 +1,7 @@
 package com.lctproject.toolspredict.controller;
 
+import com.lctproject.toolspredict.model.Job;
+import com.lctproject.toolspredict.service.JobService;
 import com.lctproject.toolspredict.service.ManageJobsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -18,9 +20,11 @@ import java.util.NoSuchElementException;
 @Tag(name="Тест модели", description = "API ToolsPredict")
 public class TestController {
     private final ManageJobsService manageJobsService;
+    private final JobService jobService;
 
-    public TestController(ManageJobsService manageJobsService) {
+    public TestController(ManageJobsService manageJobsService, JobService jobService) {
         this.manageJobsService = manageJobsService;
+        this.jobService = jobService;
     }
 
     @PostMapping(value = "/model", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -30,7 +34,9 @@ public class TestController {
                                         @Parameter(description = "Стоит ли выполнять поиск маркировок? Внимание: время распознавания сильно увеличится.")
                                         @RequestParam(value = "searchMarking", defaultValue = "false") boolean searchMarking) {
         try {
-            return manageJobsService.testModels(file, searchMarking);
+            Job job = jobService.createTestJob();
+            manageJobsService.testModels(job, file, searchMarking);
+            return ResponseEntity.accepted().body(job.getId());
         } catch (NoSuchElementException ex) {
             ex.printStackTrace();
             return new ResponseEntity<>("Модели не удалось распознать инструменты на фото.", HttpStatus.UNPROCESSABLE_ENTITY);

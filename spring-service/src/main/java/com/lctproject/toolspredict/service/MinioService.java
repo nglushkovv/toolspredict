@@ -19,4 +19,6 @@ public interface MinioService {
     void uploadFileFromStream(String fileName, ZipInputStream zis, long size, Long jobId);
 
     List<Item> listObjects(String bucketName, String prefix);
+
+    String generatePresignedUrl(String bucketName, String objectName, int expirySeconds);
 }

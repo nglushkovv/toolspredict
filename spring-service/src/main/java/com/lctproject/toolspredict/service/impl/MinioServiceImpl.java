@@ -4,6 +4,7 @@ import com.lctproject.toolspredict.dto.minio.MinioFileDto;
 import com.lctproject.toolspredict.service.MinioService;
 import io.minio.*;
 import io.minio.errors.*;
+import io.minio.http.Method;
 import io.minio.messages.Item;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
@@ -211,6 +212,23 @@ public class MinioServiceImpl implements MinioService {
         }
 
         return items;
+    }
+
+    @Override
+    public String generatePresignedUrl(String bucketName, String objectName, int expirySeconds) {
+        try {
+            return client.getPresignedObjectUrl(
+                    GetPresignedObjectUrlArgs.builder()
+                            .bucket(bucketName)
+                            .object(objectName)
+                            .method(Method.GET)
+                            .expiry(expirySeconds)
+                            .build()
+            );
+        } catch (Exception e) {
+            log.error("Ошибка при генерации presigned ссылки: {}", e.getMessage(), e);
+            return null;
+        }
     }
 
 }

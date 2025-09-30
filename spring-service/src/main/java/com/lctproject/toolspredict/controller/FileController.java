@@ -21,6 +21,16 @@ public class FileController {
         this.minioFileService = minioFileService;
     }
 
+    @GetMapping("/{fileId}/link")
+    @Operation(summary = "Получить ссылку на файл в MinIO по ID")
+    public ResponseEntity<?> getFileLink(@PathVariable Long fileId) {
+        try {
+            return ResponseEntity.ok(minioFileService.getUrl(fileId));
+        } catch (Exception ex) {
+            return ResponseEntity.badRequest().body(ex.getMessage());
+        }
+    }
+
     @GetMapping("/{fileId}")
     @Operation(summary = "Получить файл из MinIO по ID")
     public ResponseEntity<?> getFile(@PathVariable Long fileId) {

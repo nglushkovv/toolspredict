@@ -111,6 +111,22 @@ const Index = () => {
     } catch {}
   }, [currentView, selectedOrderId, actionType, jobData, testJobData]);
 
+  // Reconcile restored state with actual data (orders) to avoid blank screens
+  useEffect(() => {
+    // If a specific order is required by view but it's not found, reset
+    const needsOrder = currentView === 'details' || currentView === 'upload' || currentView === 'results';
+    if (needsOrder && selectedOrderId && !orders.find(o => o.id === selectedOrderId)) {
+      setCurrentView('orders');
+      setSelectedOrderId(null);
+      setJobData(null);
+      try { localStorage.removeItem('afl-tools-ui-state'); } catch {}
+      toast({
+        title: 'Сеанс обновлен',
+        description: 'Ранее выбранный заказ недоступен. Возврат на главную.',
+      });
+    }
+  }, [orders, currentView, selectedOrderId, toast]);
+
   const loadOrders = async (targetPage = 0, append = false) => {
     try {
       if (append) setLoadingMore(true); else setLoading(true);
@@ -423,7 +439,16 @@ const Index = () => {
         );
 
       case "details":
-        if (!selectedOrder) return null;
+        if (!selectedOrder) {
+          return (
+            <div className="container mx-auto p-6">
+              <div className="text-center py-12">
+                <p className="mb-4">Заказ не найден. Возможно, он был удален.</p>
+                <button className="px-4 py-2 rounded bg-primary text-primary-foreground" onClick={handleBackToOrders}>На главную</button>
+              </div>
+            </div>
+          );
+        }
         return (
           <OrderDetails
             order={selectedOrder}
@@ -434,7 +459,16 @@ const Index = () => {
         );
 
       case "upload":
-        if (!selectedOrder || !jobData) return null;
+        if (!selectedOrder || !jobData) {
+          return (
+            <div className="container mx-auto p-6">
+              <div className="text-center py-12">
+                <p className="mb-4">Задача или заказ недоступны. Возврат к деталям заказа.</p>
+                <button className="px-4 py-2 rounded bg-primary text-primary-foreground" onClick={handleBackToOrders}>На главную</button>
+              </div>
+            </div>
+          );
+        }
         return (
           <FileUpload
             orderNumber={selectedOrder.orderNumber}
@@ -446,7 +480,16 @@ const Index = () => {
         );
 
       case "results":
-        if (!selectedOrder || !jobData) return null;
+        if (!selectedOrder || !jobData) {
+          return (
+            <div className="container mx-auto p-6">
+              <div className="text-center py-12">
+                <p className="mb-4">Результаты недоступны. Задача или заказ отсутствуют.</p>
+                <button className="px-4 py-2 rounded bg-primary text-primary-foreground" onClick={handleBackToOrders}>На главную</button>
+              </div>
+            </div>
+          );
+        }
         return (
           <RecognitionResults
             orderNumber={selectedOrder.orderNumber}

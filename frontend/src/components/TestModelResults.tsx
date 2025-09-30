@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -83,50 +83,79 @@ export const TestModelResults = ({ jobId, searchMarking, onBack, onComplete }: T
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
+  const [jobStatus, setJobStatus] = useState<string>("STARTED");
+  const [isPolling, setIsPolling] = useState<boolean>(true);
+  const pollRef = useRef<number | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
+    let cancelled = false;
+
     const fetchResults = async () => {
       try {
         setLoading(true);
         setError(null);
-        
-        console.log('Fetching classification results for jobId:', jobId);
-        
-        // Загружаем результаты классификации и сырые файлы параллельно
         const [classificationData, rawFilesData] = await Promise.all([
           apiService.getClassificationResults(jobId),
           apiService.getJobFiles(jobId, 'RAW')
         ]);
-        
-        console.log('Classification results data:', classificationData);
-        console.log('Raw files data:', rawFilesData);
-        console.log('First result structure:', classificationData[0]);
-        
+        if (cancelled) return;
         setResults(classificationData);
         setRawFiles(rawFilesData);
       } catch (error) {
+        if (cancelled) return;
         console.error('Failed to fetch test results:', error);
-        
         let errorMessage = "Не удалось загрузить результаты тестирования";
-        
         if (error instanceof ApiError) {
           errorMessage = error.message;
         }
-        
         setError(errorMessage);
-        
-        toast({
-          title: "Ошибка загрузки",
-          description: errorMessage,
-          variant: "destructive",
-        });
+        toast({ title: "Ошибка загрузки", description: errorMessage, variant: "destructive" });
       } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    const pollStatus = async () => {
+      try {
+        const statusResp = await apiService.getJobStatus(jobId);
+        const status = (statusResp?.status || statusResp) as string;
+        setJobStatus(status);
+        if (status === 'FINISHED') {
+          setIsPolling(false);
+          if (pollRef.current) {
+            window.clearInterval(pollRef.current);
+            pollRef.current = null;
+          }
+          await fetchResults();
+        }
+      } catch (e) {
+        console.error('Failed to poll job status:', e);
+        // Если задача удалена/не найдена — прекращаем и показываем ошибку
+        setIsPolling(false);
+        if (pollRef.current) {
+          window.clearInterval(pollRef.current);
+          pollRef.current = null;
+        }
+        let msg = 'Не удалось получить статус задачи';
+        if (e instanceof ApiError) msg = e.message;
+        setError(msg);
         setLoading(false);
       }
     };
 
-    fetchResults();
+    // Немедленный первый опрос
+    pollStatus();
+    // Периодический опрос каждые 3 секунды
+    pollRef.current = window.setInterval(pollStatus, 3000);
+
+    return () => {
+      cancelled = true;
+      if (pollRef.current) {
+        window.clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
   }, [jobId, toast]);
 
   const getConfidenceColor = (confidence: number) => {
@@ -169,13 +198,15 @@ export const TestModelResults = ({ jobId, searchMarking, onBack, onComplete }: T
     setExpandedItems(newExpanded);
   };
 
-  if (loading) {
+  if (loading || (isPolling && !results && !error)) {
     return (
       <div className="container mx-auto p-6 max-w-4xl">
         <div className="flex items-center justify-center py-12">
           <div className="text-center space-y-4">
             <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-            <p className="text-muted-foreground">Загрузка результатов тестирования...</p>
+            <p className="text-muted-foreground">
+              {isPolling ? `Идет обработка архива. Статус: ${jobStatus || 'WAITING'}...` : 'Загрузка результатов тестирования...'}
+            </p>
           </div>
         </div>
       </div>

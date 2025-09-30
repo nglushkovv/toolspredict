@@ -310,7 +310,19 @@ class ApiService {
   // Job status
   async getJobStatus(jobId: number) {
     const response = await this.makeRequest(`${API_BASE_URL}/jobs/${jobId}/status`);
-    return response.json();
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      return response.json();
+    }
+    const text = (await response.text()).trim();
+    // Попробуем распарсить JSON из текста, если это случайно JSON
+    try {
+      const maybeJson = JSON.parse(text);
+      return maybeJson;
+    } catch {
+      // Вернем простой текст статуса, например: STARTED/FINISHED/TEST
+      return text;
+    }
   }
 
 
@@ -386,19 +398,47 @@ class ApiService {
       }
     }
     
-    const result = await response.json();
-    console.log('testModel API response:', result);
-    
-    // Сервер возвращает просто число (jobId), а не объект
-    let jobId: number;
-    if (typeof result === 'number') {
-      jobId = result;
-    } else if (result && typeof result.jobId === 'number') {
-      jobId = result.jobId;
-    } else {
-      throw new ApiError('Неверный формат ответа от сервера: ожидается число (jobId)', 500);
+    // Ответ может быть: number, string, или JSON-объект с полем jobId/id
+    const contentType = response.headers.get('content-type') || '';
+    let jobId: number | null = null;
+    try {
+      if (contentType.includes('application/json')) {
+        const result = await response.json();
+        console.log('testModel API JSON response:', result);
+        if (typeof result === 'number') {
+          jobId = result;
+        } else if (result && typeof result.jobId === 'number') {
+          jobId = result.jobId;
+        } else if (result && typeof result.id === 'number') {
+          jobId = result.id;
+        } else if (typeof result === 'string' && /^\d+$/.test(result)) {
+          jobId = parseInt(result, 10);
+        }
+      } else {
+        const text = await response.text();
+        console.log('testModel API text response:', text);
+        const trimmed = (text || '').trim();
+        // Может прийти как "17" или 17
+        const numericMatch = trimmed.match(/\d+/);
+        if (numericMatch) {
+          jobId = parseInt(numericMatch[0], 10);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to parse testModel response, trying text fallback', e);
+      try {
+        const fallbackText = await response.text();
+        const numericMatch = (fallbackText || '').trim().match(/\d+/);
+        if (numericMatch) {
+          jobId = parseInt(numericMatch[0], 10);
+        }
+      } catch {}
     }
-    
+
+    if (typeof jobId !== 'number' || Number.isNaN(jobId)) {
+      throw new ApiError('Неверный формат ответа от сервера: ожидается идентификатор задачи', 500);
+    }
+
     return { jobId };
   }
 }

@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -17,7 +17,9 @@ export const TestModelUpload = ({ onBack, onNext }: TestModelUploadProps) => {
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [searchMarking, setSearchMarking] = useState(false);
+  const [processing, setProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pollingRef = useRef<number | null>(null);
   const { toast } = useToast();
 
   const handleFileSelect = (file: File) => {
@@ -79,14 +81,48 @@ export const TestModelUpload = ({ onBack, onNext }: TestModelUploadProps) => {
       if (!result || typeof result.jobId !== 'number') {
         throw new Error('Неверный формат ответа: отсутствует jobId');
       }
-      
-      toast({
-        title: "Архив загружен",
-        description: "Тестирование модели запущено. Переход к результатам...",
-      });
 
-      console.log('Calling onNext with jobId:', result.jobId, 'searchMarking:', searchMarking);
-      onNext(result.jobId, searchMarking);
+      // После получения jobId начинаем опрос статуса и держим крутилку
+      const jobId = result.jobId;
+      let intervalId: number | null = null;
+
+      const poll = async () => {
+        try {
+          const statusResp = await apiService.getJobStatus(jobId);
+          const status = (statusResp?.status || statusResp || '').toString();
+          if (status.toUpperCase() === 'FINISHED') {
+            if (intervalId) {
+              window.clearInterval(intervalId);
+              intervalId = null;
+            }
+            setProcessing(false);
+            onNext(jobId, searchMarking);
+          }
+          else {
+            // Любой не-FINISHED статус переводит нас в состояние обработки
+            setProcessing(true);
+            // выключим исходную фазу загрузки, чтобы крутилка не погасла при смене состояний
+            setUploading(false);
+          }
+        } catch (e) {
+          console.error('Failed to poll job status:', e);
+          if (intervalId) {
+            window.clearInterval(intervalId);
+            intervalId = null;
+          }
+          // Остановим крутилку и покажем ошибку
+          setUploading(false);
+          setProcessing(false);
+          let errorMessage = 'Не удалось получить статус задачи';
+          if (e instanceof ApiError) errorMessage = e.message;
+          toast({ title: 'Ошибка', description: errorMessage, variant: 'destructive' });
+        }
+      };
+
+      // Немедленно проверим и затем каждые 3 секунды
+      await poll();
+      intervalId = window.setInterval(poll, 3000);
+      pollingRef.current = intervalId;
     } catch (error) {
       console.error('Failed to upload archive:', error);
       
@@ -101,10 +137,22 @@ export const TestModelUpload = ({ onBack, onNext }: TestModelUploadProps) => {
         description: errorMessage,
         variant: "destructive",
       });
-    } finally {
       setUploading(false);
+      setProcessing(false);
+    } finally {
+      // Крутилку не выключаем здесь — она выключится либо при ошибке, либо после перехода
     }
   };
+
+  // Очистка интервала при размонтировании
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) {
+        window.clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+    };
+  }, []);
 
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
@@ -225,19 +273,19 @@ export const TestModelUpload = ({ onBack, onNext }: TestModelUploadProps) => {
                 <Button
                   variant="outline"
                   onClick={() => setSelectedFile(null)}
-                  disabled={uploading}
+                  disabled={uploading || processing}
                 >
                   Отмена
                 </Button>
                 <Button
                   onClick={handleUpload}
-                  disabled={uploading}
+                  disabled={uploading || processing}
                   className="bg-primary hover:bg-primary/90"
                 >
-                  {uploading ? (
+                  {uploading || processing ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      Загрузка...
+                      {uploading ? 'Загрузка...' : 'Обработка...'}
                     </>
                   ) : (
                     "Загрузить и тестировать"

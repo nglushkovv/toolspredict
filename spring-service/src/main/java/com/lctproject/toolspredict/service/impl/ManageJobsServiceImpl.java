@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -130,9 +131,9 @@ public class ManageJobsServiceImpl implements ManageJobsService {
         return null;
     }
 
+    @Async
     @Override
-    public ResponseEntity<?> testModels(MultipartFile file, boolean searchMarking) {
-        Job job = jobService.createTestJob();
+    public void testModels(Job job, MultipartFile file, boolean searchMarking) {
         long jobId = job.getId();
         List<String> savedKeys = minioFileService.createFromArchive(file, job);
         for (String rawFileKey : savedKeys) {
@@ -143,7 +144,7 @@ public class ManageJobsServiceImpl implements ManageJobsService {
                 log.error("Ошибка обработки файла {}: {}", rawFileKey, ex.getMessage());
             }
         }
-        return ResponseEntity.ok(job.getId());
+        jobService.updateStatus(job.getId(), JobStatus.FINISHED);
     }
 
 

@@ -71,7 +71,6 @@ public class JobServiceImpl implements JobService {
     @Override
     public void updateStatus(Long jobId, JobStatus status) {
         Job job = getJob(jobId);
-        if (job.getStatus().equals("TEST")) return;
         job.setStatus(status.toString());
         processingJobsRepository.save(job);
     }

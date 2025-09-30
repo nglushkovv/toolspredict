@@ -33,5 +33,5 @@ jobs:
             git reset --hard origin/develop
 
             echo "Building and restarting all services..."
-            docker compose -p aeroresnet build
-            docker compose -p aeroresnet up -d
+            docker compose -p build
+            docker compose -p up -d
