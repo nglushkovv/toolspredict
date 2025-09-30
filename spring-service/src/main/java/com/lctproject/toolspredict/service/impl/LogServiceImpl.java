@@ -42,7 +42,7 @@ public class LogServiceImpl implements LogService {
                     .setOriginalFile(minioFileRepository.findByFilePathAndBucketName(classificationResultDTO.getRawFileKey(), bucketRaw))
                     .setCreatedAt(LocalDateTime.now())
                     .setConfidence(classificationResultDTO.getConfidence())
-                    .setTool(toolRepository.findByName(classificationResultDTO.getMicroClass()))
+                    .setTool(toolRepository.findByTrimmedName(classificationResultDTO.getMicroClass()))
                     .setMarking(classificationResultDTO.getMarking());
 
             classificationResultRepository.save(classificationResult);

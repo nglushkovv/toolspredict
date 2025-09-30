@@ -41,7 +41,7 @@ public class ManageJobsServiceImpl implements ManageJobsService {
             for (Map.Entry<String, String> entry: response.getResults().entrySet()) {
                 try {
                     ClassificationResponseDTO classificationResponseDTO = sendToRecognition(entry.getValue(), jobId);
-                    handleClassificationResponse(classificationResponseDTO, jobId, rawFileKey);
+                    handleClassificationResponse(classificationResponseDTO, jobId, entry.getValue(), true);
                     countSaved++;
                     builder.append(entry.getValue()).append(": ").append("OK").append("\n");
                 } catch (NoSuchElementException e) {
@@ -56,15 +56,16 @@ public class ManageJobsServiceImpl implements ManageJobsService {
             return builder.toString();
         } else {
             ClassificationResponseDTO response = sendToRecognition(rawFileKey, jobId);
-            handleClassificationResponse(response, jobId, rawFileKey);
+            handleClassificationResponse(response, jobId, rawFileKey, true);
             return "OK";
         }
     }
 
-    private void handleClassificationResponse(ClassificationResponseDTO response, Long jobId, String rawFileKey) {
+    private void handleClassificationResponse(ClassificationResponseDTO response, Long jobId, String rawFileKey, Boolean searchMarking) {
         for (Map.Entry<String,ClassificationResultDTO> entry: response.getResults().entrySet()) {
             ClassificationResultDTO classificationResultDTO = entry.getValue().setRawFileKey(rawFileKey);
-            String marking = sendToEnrichment(jobId, rawFileKey, entry.getKey());
+            String marking = null;
+            if (searchMarking) marking = sendToEnrichment(jobId, rawFileKey, entry.getKey());
             logService.logClassificationResult(jobId, classificationResultDTO.setMarking(marking), entry.getKey());
         }
     }
@@ -130,14 +131,14 @@ public class ManageJobsServiceImpl implements ManageJobsService {
     }
 
     @Override
-    public ResponseEntity<?> testModels(MultipartFile file) {
+    public ResponseEntity<?> testModels(MultipartFile file, boolean searchMarking) {
         Job job = jobService.createTestJob();
         long jobId = job.getId();
         List<String> savedKeys = minioFileService.createFromArchive(file, job);
         for (String rawFileKey : savedKeys) {
             try {
                 ClassificationResponseDTO response = sendToRecognition(rawFileKey, jobId);
-                handleClassificationResponse(response, jobId, rawFileKey);
+                handleClassificationResponse(response, jobId, rawFileKey, searchMarking);
             } catch (Exception ex) {
                 log.error("Ошибка обработки файла {}: {}", rawFileKey, ex.getMessage());
             }

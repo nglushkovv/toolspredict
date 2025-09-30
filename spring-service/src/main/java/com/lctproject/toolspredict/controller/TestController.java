@@ -26,9 +26,11 @@ public class TestController {
     @PostMapping(value = "/model", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Загрузка архива фотографий для теста модели")
     public ResponseEntity<?> uploadFile(@Parameter(description = "Загрузка архива")
-                                        @RequestParam("file") MultipartFile file) {
+                                        @RequestParam("file") MultipartFile file,
+                                        @Parameter(description = "Стоит ли выполнять поиск маркировок? Внимание: время распознавания сильно увеличится.")
+                                        @RequestParam(value = "searchMarking", defaultValue = "false") boolean searchMarking) {
         try {
-            return manageJobsService.testModels(file);
+            return manageJobsService.testModels(file, searchMarking);
         } catch (NoSuchElementException ex) {
             ex.printStackTrace();
             return new ResponseEntity<>("Модели не удалось распознать инструменты на фото.", HttpStatus.UNPROCESSABLE_ENTITY);
