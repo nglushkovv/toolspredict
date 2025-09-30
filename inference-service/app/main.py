@@ -69,17 +69,22 @@ class OCRService:
 
     def _process_model_output(self, text: str) -> Optional[str]:
         """
-        Извлекает и форматирует код вида AT-XXXXXXX.
-        Если дефис перед последней цифрой отсутствует — добавляет.
+        Извлекает и форматирует коды вида:
+        - AT-XXXXXXX
+        - AT-XXXXXX-X
+        Возвращает строку в формате AT-XXXXXX-X.
         """
+        match = re.search(r"AT-\d{6}-\d", text)
+        if match:
+            return match.group()
+
         match = re.search(r"AT-\d{7}", text)
-        if not match:
-            return None
-        code = match.group()  # например, 'AT-2882935'
-        # Превратить в 'AT-XXXXXX-X', если нет дефиса перед последней цифрой
-        if not re.match(r"AT-\d{6}-\d", code):
-            code = code[:-1] + "-" + code[-1]
-        return code
+        if match:
+            code = match.group()
+            return code[:-1] + "-" + code[-1]
+
+        return None
+
 
     def run_ocr(self, image: Image.Image) -> Tuple[Optional[str], str]:
         """
@@ -161,34 +166,24 @@ async def enrich(request: EnrichmentRequest):
 
     print("\n--- /enrich called ---")
     print("Request:", request.dict())
-    debug_info = {}
 
     raw_bucket = getattr(settings, "minio_bucket_raw")
     processed_bucket = getattr(settings, "minio_bucket_processed")
-    debug_bucket = getattr(settings, "minio_bucket_debug", processed_bucket)
-    debug_folder = "debug_crops"
 
     try:
-        # 1) Читаем картинку
-        print(f"Step 1: Fetching image from minio: bucket={raw_bucket} key={request.raw_file_key}")
+        print(f"Step 1: Fetching image from minio: bucket={raw_bucket}, key={request.raw_file_key}")
         img = get_image_from_minio(raw_bucket, request.raw_file_key)
-        print("Step 1: Image loaded. Size:", img.size)
-        debug_info['orig_img_size'] = img.size
+        print(f"Step 1: Image loaded. Size: {img.size}")
 
-        # 2) Читаем метаданные (processed JSON) и пытаемся взять bbox
-        print(f"Step 2: Fetching meta from minio: bucket={processed_bucket} key={request.processed_file_key}")
+        print(f"Step 2: Fetching meta from minio: bucket={processed_bucket}, key={request.processed_file_key}")
         meta = get_json_from_minio(processed_bucket, request.processed_file_key)
-        print("Step 2: Meta loaded:", meta)
-        debug_info['meta'] = meta
+        print(f"Step 2: Meta loaded: {meta}")
         bbox = extract_bbox(meta)
-        print("Step 2: Extracted bbox:", bbox)
-        debug_info['bbox'] = bbox
+        print(f"Step 2: Extracted bbox: {bbox}")
 
-        # 3) Кроп, если есть bbox
         cropped_img = img
         if bbox is not None:
             x1, y1, x2, y2 = bbox
-            # Защита от невалидных значений
             w, h = img.size
             x1 = max(0, min(x1, w))
             x2 = max(0, min(x2, w))
@@ -197,44 +192,23 @@ async def enrich(request: EnrichmentRequest):
             print(f"Step 3: Crop coords cleaned: ({x1}, {y1}, {x2}, {y2}), img.size: {img.size}")
             if x2 > x1 and y2 > y1:
                 cropped_img = img.crop((x1, y1, x2, y2))
-                print("Step 3: Image cropped. New size:", cropped_img.size)
-                debug_info['cropped_size'] = cropped_img.size
+                print(f"Step 3: Image cropped. New size: {cropped_img.size}")
             else:
                 print("Step 3: Invalid bbox, skip crop.")
         else:
             print("Step 3: No bbox, skipping crop.")
 
-        # --- Сохраняем кроп в Minio для дебага ---
-        try:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-            debug_key = f"{debug_folder}/crop_{timestamp}_{request.raw_file_key.replace('/', '_')}.jpg"
-            buf = BytesIO()
-            cropped_img.save(buf, format='JPEG')
-            buf.seek(0)
-            minio_client.put_object(
-                debug_bucket, debug_key, buf, length=buf.getbuffer().nbytes, content_type="image/jpeg"
-            )
-            print(f"Step 3: Cropped image stored in minio at {debug_bucket}/{debug_key}")
-            debug_info["debug_crop_key"] = debug_key
-        except Exception as ex_save:
-            print("Step 3: Failed to upload debug crop:", ex_save)
-            debug_info["debug_crop_key"] = None
-
-        # 4) OCR
         print("Step 4: Running Florence OCR on cropped image.")
         ocr_service: OCRService = app.state.ocr_service
         marking, _raw = ocr_service.run_ocr(cropped_img)
         print("Step 4: OCR result - marking:", marking)
         print("Step 4: OCR result - raw_output:", _raw)
-        debug_info['marking'] = marking
-        debug_info['raw_output'] = _raw
 
         print("--- /enrich completed OK ---\n")
         return JSONResponse(content={
             "marking": marking,
             "raw_output": _raw,
             "bbox": bbox,
-            "debug_crop_key": debug_info["debug_crop_key"],
             "meta": meta
         })
     except Exception as e:
@@ -246,6 +220,7 @@ async def enrich(request: EnrichmentRequest):
             "error": str(e),
             "trace": traceback.format_exc()
         })
+
 
 if __name__ == "__main__":
     import uvicorn
