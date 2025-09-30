@@ -158,7 +158,7 @@ export const RecognitionResults = ({ orderNumber, orderId, actionType, jobId, on
         
         items.push({
           id: String(ot.id ?? `ord-${idx}`),
-          name: tool?.name ?? tool?.toolReference?.toolName ?? `Инструмент ${idx + 1}`,
+          name: tool?.name ?? `Инструмент ${idx + 1}`,
           partNumber: tool?.partNumber ?? '',
           required: 1,
           found,
@@ -168,8 +168,8 @@ export const RecognitionResults = ({ orderNumber, orderId, actionType, jobId, on
           orderedMarking: orderedMarking,
           markingStatus: markingStatus,
           // Add image data if available
-          originalImageId: bestRecognition?.preprocessResult?.originalFile?.id,
-          preprocessFileId: bestRecognition?.preprocessResult?.file?.id,
+          originalImageId: bestRecognition?.originalFile?.id,
+          preprocessFileId: bestRecognition?.file?.id,
           detailedResult: bestRecognition,
         });
       });
@@ -180,7 +180,7 @@ export const RecognitionResults = ({ orderNumber, orderId, actionType, jobId, on
         if (typeof tid === 'number' && !usedRecognitions.has(idx)) {
           items.push({
             id: String(r.id ?? `rec-${idx}`),
-            name: r.tool?.name ?? r.tool?.toolReference?.toolName ?? `Распознанный инструмент ${idx + 1}`,
+            name: r.tool?.name ?? `Распознанный инструмент ${idx + 1}`,
             partNumber: r.tool?.partNumber ?? '',
             required: 0,
             found: 1,
@@ -189,8 +189,8 @@ export const RecognitionResults = ({ orderNumber, orderId, actionType, jobId, on
             marking: r.marking,
             markingStatus: "not_specified",
             // Add image data
-            originalImageId: r.preprocessResult?.originalFile?.id,
-            preprocessFileId: r.preprocessResult?.file?.id,
+            originalImageId: r.originalFile?.id,
+            preprocessFileId: r.file?.id,
             detailedResult: r,
           });
         }
@@ -372,7 +372,10 @@ export const RecognitionResults = ({ orderNumber, orderId, actionType, jobId, on
                                 {getStatusIcon(item.status)}
                                 <div>
                                   <p className="font-medium">{item.name}</p>
-                                  <p className="text-sm text-muted-foreground">Номер: {item.partNumber}</p>
+                                  {/* Показываем номер только для заказанных инструментов */}
+                                  {item.orderedMarking && item.partNumber && (
+                                    <p className="text-sm text-muted-foreground">Номер: {item.partNumber}</p>
+                                  )}
                                   {/* Показываем маркировки только если они есть */}
                                   {item.orderedMarking && (
                                     <p className="text-sm text-muted-foreground">
@@ -390,6 +393,18 @@ export const RecognitionResults = ({ orderNumber, orderId, actionType, jobId, on
                                             {item.markingStatus === "match" && <span className="text-success ml-2">✓</span>}
                                             {item.markingStatus === "mismatch" && <span className="text-orange-500 ml-2">⚠</span>}
                                           </>
+                                        ) : (
+                                          <span className="text-orange-500 font-medium">Не распознана</span>
+                                        )
+                                      }
+                                    </p>
+                                  )}
+                                  {/* Для лишних инструментов показываем маркировку отдельно */}
+                                  {!item.orderedMarking && (
+                                    <p className="text-sm text-muted-foreground">
+                                      Маркировка: {
+                                        item.marking ? (
+                                          <span className="font-medium text-info">{item.marking}</span>
                                         ) : (
                                           <span className="text-orange-500 font-medium">Не распознана</span>
                                         )
@@ -448,7 +463,10 @@ export const RecognitionResults = ({ orderNumber, orderId, actionType, jobId, on
                           {getStatusIcon(item.status)}
                           <div>
                             <p className="font-medium">{item.name}</p>
-                            <p className="text-sm text-muted-foreground">Номер: {item.partNumber}</p>
+                            {/* Показываем номер только для заказанных инструментов */}
+                            {item.orderedMarking && item.partNumber && (
+                              <p className="text-sm text-muted-foreground">Номер: {item.partNumber}</p>
+                            )}
                             {/* Показываем маркировки только если они есть */}
                             {item.orderedMarking && (
                               <p className="text-sm text-muted-foreground">

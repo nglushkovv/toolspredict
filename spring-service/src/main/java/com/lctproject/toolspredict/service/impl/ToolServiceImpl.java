@@ -5,7 +5,6 @@ import com.lctproject.toolspredict.model.Order;
 import com.lctproject.toolspredict.model.Tool;
 import com.lctproject.toolspredict.model.ToolOrderItem;
 import com.lctproject.toolspredict.repository.ToolOrderItemRepository;
-import com.lctproject.toolspredict.repository.ToolReferenceRepository;
 import com.lctproject.toolspredict.repository.ToolRepository;
 import com.lctproject.toolspredict.service.ToolService;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +25,6 @@ import java.util.UUID;
 public class ToolServiceImpl implements ToolService {
 
     private final ToolOrderItemRepository toolOrderItemRepository;
-    private final ToolReferenceRepository toolReferenceRepository;
     private final ToolRepository toolRepository;
 
     @Override

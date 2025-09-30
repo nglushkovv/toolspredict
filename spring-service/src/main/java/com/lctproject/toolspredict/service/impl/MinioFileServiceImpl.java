@@ -5,7 +5,6 @@ import com.lctproject.toolspredict.dto.minio.MinioFileDto;
 import com.lctproject.toolspredict.model.Job;
 import com.lctproject.toolspredict.model.MinioFile;
 import com.lctproject.toolspredict.repository.MinioFileRepository;
-import com.lctproject.toolspredict.repository.PreprocessResultRepository;
 import com.lctproject.toolspredict.service.MinioFileService;
 import com.lctproject.toolspredict.service.MinioService;
 import lombok.RequiredArgsConstructor;
@@ -33,7 +32,6 @@ import java.util.zip.ZipInputStream;
 public class MinioFileServiceImpl implements MinioFileService {
     private final MinioFileRepository minioFileRepository;
     private final MinioService minioService;
-    private final PreprocessResultRepository preprocessResultRepository;
     @Value("${integrations.minio.bucket.raw}")
     private String bucketRaw;
     @Value("${integrations.minio.bucket.processed}")

@@ -2,19 +2,21 @@ import { useState, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Upload, FileArchive, ArrowLeft, Loader2, CheckCircle, AlertCircle } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Upload, FileArchive, ArrowLeft, Loader2, CheckCircle, AlertCircle, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiService, ApiError } from "@/lib/api";
 
 interface TestModelUploadProps {
   onBack: () => void;
-  onNext: (jobId: number) => void;
+  onNext: (jobId: number, searchMarking: boolean) => void;
 }
 
 export const TestModelUpload = ({ onBack, onNext }: TestModelUploadProps) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [searchMarking, setSearchMarking] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -70,7 +72,7 @@ export const TestModelUpload = ({ onBack, onNext }: TestModelUploadProps) => {
     try {
       setUploading(true);
       
-      const result = await apiService.testModel(selectedFile);
+      const result = await apiService.testModel(selectedFile, searchMarking);
       console.log('API testModel result:', result);
       
       // Проверяем, что jobId получен
@@ -80,11 +82,11 @@ export const TestModelUpload = ({ onBack, onNext }: TestModelUploadProps) => {
       
       toast({
         title: "Архив загружен",
-        description: "Тестирование модели запущено. Предыдущие результаты будут удалены.",
+        description: "Тестирование модели запущено. Переход к результатам...",
       });
 
-      console.log('Calling onNext with jobId:', result.jobId);
-      onNext(result.jobId);
+      console.log('Calling onNext with jobId:', result.jobId, 'searchMarking:', searchMarking);
+      onNext(result.jobId, searchMarking);
     } catch (error) {
       console.error('Failed to upload archive:', error);
       
@@ -191,6 +193,31 @@ export const TestModelUpload = ({ onBack, onNext }: TestModelUploadProps) => {
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* Настройки тестирования */}
+            <div className="mt-6 space-y-4">
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="searchMarking" 
+                  checked={searchMarking}
+                  onCheckedChange={(checked) => setSearchMarking(checked === true)}
+                />
+                <label 
+                  htmlFor="searchMarking" 
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  Распознавать маркировку инструментов
+                </label>
+              </div>
+              <div className="flex items-start space-x-2 text-sm text-muted-foreground">
+                <Clock className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-medium">Время обработки:</p>
+                  <p>• Без маркировки: ~2 секунды на инструмент</p>
+                  <p>• С маркировкой: ~10 секунд на инструмент</p>
+                </div>
+              </div>
             </div>
 
             {selectedFile && (

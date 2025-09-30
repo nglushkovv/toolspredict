@@ -1,7 +1,7 @@
 package com.lctproject.toolspredict.service;
 
+import com.lctproject.toolspredict.model.ClassificationResult;
 import com.lctproject.toolspredict.model.Job;
-import com.lctproject.toolspredict.model.PredictionResult;
 import org.springframework.http.ResponseEntity;
 
 import java.util.List;
@@ -11,5 +11,5 @@ public interface ComparsionService {
 
     List<Long> getMergedToolList(Long jobId);
 
-    List<PredictionResult> getMergedResults(Long jobId);
+    List<ClassificationResult> getMergedResults(Long jobId);
 }

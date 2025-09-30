@@ -10,6 +10,7 @@ import { ImageWithBbox } from "@/components/ImageWithBbox";
 
 interface TestModelResultsProps {
   jobId: number;
+  searchMarking: boolean;
   onBack: () => void;
   onComplete: () => void;
 }
@@ -26,10 +27,6 @@ interface ClassificationResult {
   tool: {
     id: number;
     name: string;
-    toolReference: {
-      id: number;
-      toolName: string;
-    };
   };
   file: {
     id: number;
@@ -44,46 +41,18 @@ interface ClassificationResult {
     filePath: string;
     fileName: string;
   };
-  preprocessResult: {
+  originalFile: {
     id: number;
-    job: {
+    packageId: {
       id: number;
       status: string;
       createDate: string;
       lastModified: string | null;
     };
-    toolReference: {
-      id: number;
-      toolName: string;
-    } | null;
-    file: {
-      id: number;
-      packageId: {
-        id: number;
-        status: string;
-        createDate: string;
-        lastModified: string | null;
-      };
-      createdAt: string;
-      bucketName: string;
-      filePath: string;
-      fileName: string;
-    };
-    originalFile: {
-      id: number;
-      packageId: {
-        id: number;
-        status: string;
-        createDate: string;
-        lastModified: string | null;
-      };
-      createdAt: string | null;
-      bucketName: string;
-      filePath: string;
-      fileName: string;
-    };
-    confidence: number | null;
-    createdAt: string;
+    createdAt: string | null;
+    bucketName: string;
+    filePath: string;
+    fileName: string;
   };
   confidence: number;
   createdAt: string;
@@ -108,7 +77,7 @@ interface RawFile {
 // API возвращает массив результатов напрямую
 type TestModelResponse = ClassificationResult[];
 
-export const TestModelResults = ({ jobId, onBack, onComplete }: TestModelResultsProps) => {
+export const TestModelResults = ({ jobId, searchMarking, onBack, onComplete }: TestModelResultsProps) => {
   const [results, setResults] = useState<TestModelResponse | null>(null);
   const [rawFiles, setRawFiles] = useState<RawFile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -174,10 +143,10 @@ export const TestModelResults = ({ jobId, onBack, onComplete }: TestModelResults
 
   // Группируем результаты по оригинальным файлам
   const groupedResults = results ? results.reduce((acc, result) => {
-    const originalFileId = result.preprocessResult.originalFile.id;
+    const originalFileId = result.originalFile.id;
     if (!acc[originalFileId]) {
       acc[originalFileId] = {
-        originalFile: result.preprocessResult.originalFile,
+        originalFile: result.originalFile,
         results: []
       };
     }
@@ -394,8 +363,8 @@ export const TestModelResults = ({ jobId, onBack, onComplete }: TestModelResults
                                   </Badge>
                                 </div>
                                 <ImageWithBbox
-                                  originalImageId={result.preprocessResult.originalFile.id}
-                                  preprocessFileId={result.preprocessResult.file.id}
+                                  originalImageId={result.originalFile.id}
+                                  preprocessFileId={result.file.id}
                                   toolName={result.tool.name}
                                   confidence={result.confidence}
                                   className="w-full"
@@ -409,9 +378,6 @@ export const TestModelResults = ({ jobId, onBack, onComplete }: TestModelResults
                                   <div className="text-sm space-y-1">
                                     <div>
                                       <span className="font-medium">Название:</span> {result.tool.name}
-                                    </div>
-                                    <div>
-                                      <span className="font-medium">Класс:</span> {result.tool.toolReference.toolName}
                                     </div>
                                     <div>
                                       <span className="font-medium">ID инструмента:</span> {result.tool.id}
@@ -440,11 +406,17 @@ export const TestModelResults = ({ jobId, onBack, onComplete }: TestModelResults
                                   </div>
                                 </div>
                                 
-                                {result.marking && (
+                                {searchMarking && (
                                   <div className="space-y-2">
-                                    <h6 className="font-medium text-sm">Дополнительная информация</h6>
+                                    <h6 className="font-medium text-sm">Маркировка инструмента</h6>
                                     <div className="text-sm">
-                                      <span className="font-medium">Маркировка:</span> {result.marking}
+                                      <span className="font-medium">Маркировка:</span> {
+                                        result.marking ? (
+                                          <span className="font-medium text-info ml-1">{result.marking}</span>
+                                        ) : (
+                                          <span className="text-orange-500 font-medium ml-1">Не распознана</span>
+                                        )
+                                      }
                                     </div>
                                   </div>
                                 )}

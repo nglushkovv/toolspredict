@@ -80,13 +80,13 @@ export interface ApiToolReference {
 export interface ApiTool {
   id: number;
   name: string;
-  toolReference: ApiToolReference;
 }
 
 export interface ApiOrderTool {
   id: number;
   order: ApiOrder;
   tool: ApiTool;
+  marking?: string;
 }
 
 export interface ApiOrderToolsResponse {
@@ -128,16 +128,8 @@ export interface ApiRecognitionResultDetailed {
   id: number;
   job: ApiJobInfo;
   tool: ApiTool;
-  file: ApiFileInfo | null;
-  preprocessResult: {
-    id: number;
-    job: ApiJobInfo;
-    toolReference: ApiToolReference | null;
-    file: ApiFileInfo | null;
-    originalFile: ApiFileInfo;
-    confidence: number | null;
-    createdAt: string;
-  };
+  file: ApiFileInfo;
+  originalFile: ApiFileInfo;
   confidence: number;
   createdAt: string;
   marking: string | null;
@@ -237,9 +229,10 @@ class ApiService {
     return response.json();
   }
 
-  async uploadFile(jobId: number, file: File) {
+  async uploadFile(jobId: number, file: File, searchMarking: boolean = false) {
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('searchMarking', searchMarking.toString());
 
     const response = await fetch(`${API_BASE_URL}/jobs/${jobId}/files`, {
       method: 'POST',
@@ -320,13 +313,8 @@ class ApiService {
     return response.json();
   }
 
-  // Preprocess results (macroclass detection results)
-  async getPreprocessResults(jobId: number) {
-    const response = await this.makeRequest(`${API_BASE_URL}/jobs/${jobId}/results/preprocess`);
-    return response.json();
-  }
 
-  async updateJobStatus(jobId: number, jobStatus: 'STARTED' | 'PREPROCESS' | 'FINISHED' | 'MANUAL_MAPPING_IS_REQUIRED' | 'VALIDATION') {
+  async updateJobStatus(jobId: number, jobStatus: 'STARTED' | 'FINISHED' | 'MANUAL_MAPPING_IS_REQUIRED' | 'VALIDATION') {
     const url = new URL(`${API_BASE_URL}/jobs/${jobId}/status`, window.location.origin);
     url.searchParams.set('jobStatus', jobStatus);
     const response = await this.makeRequest(url.toString(), { method: 'POST' });
@@ -366,9 +354,10 @@ class ApiService {
   }
 
   // Test model method for uploading archive and creating TEST job
-  async testModel(file: File): Promise<{ jobId: number }> {
+  async testModel(file: File, searchMarking: boolean = false): Promise<{ jobId: number }> {
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('searchMarking', searchMarking.toString());
 
     const response = await fetch(`${API_BASE_URL}/test/model`, {
       method: 'POST',

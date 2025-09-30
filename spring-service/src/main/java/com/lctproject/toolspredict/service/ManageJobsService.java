@@ -1,18 +1,18 @@
 package com.lctproject.toolspredict.service;
 
-import com.lctproject.toolspredict.dto.PreprocessResponse;
+import com.lctproject.toolspredict.dto.ClassificationResponseDTO;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
 
 public interface ManageJobsService {
 
-    String processFile(MultipartFile file, Long jobId);
+    String processFile(MultipartFile file, Long jobId, boolean searchMarking);
 
     String addRawFile(MultipartFile file, Long jobId);
 
-    PreprocessResponse getProcessedFiles(String minioKey, Long jobId);
+    ClassificationResponseDTO sendToRecognition(String minioKey, Long jobId);
 
-    ResponseEntity<?> sendToClassification(Long jobId);
+    String sendToEnrichment(Long jobId, String rawFileKey, String processedFileKey);
 
-    ResponseEntity<?> testModels(MultipartFile file);
+    ResponseEntity<?> testModels(MultipartFile file, boolean searchMarking);
 }

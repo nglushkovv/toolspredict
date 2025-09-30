@@ -34,27 +34,20 @@ public class JobContoller {
         this.jobService = jobService;
     }
 
-    @PostMapping("/{jobId}/classify")
-    @Operation(summary = "Отправить пакеты обработанных файлов на классификацию")
-    public ResponseEntity<?> sendToClassification(@PathVariable Long jobId) {
-        try {
-            return manageJobsService.sendToClassification(jobId);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
-    }
-
     @PostMapping(value = "/{jobId}/files", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Загрузка файла в job")
     public ResponseEntity<?> uploadFile(@Parameter(description = "Фото/Видео для обработки и построения прогноза")
                                              @RequestParam("file") MultipartFile file,
                                              @Parameter(description = "id процесса")
-                                             @PathVariable Long jobId) {
+                                             @PathVariable Long jobId,
+                                             @Parameter(description = "Стоит ли выполнять поиск маркировок? Внимание: время распознавания сильно увеличится.")
+                                            @RequestParam(value = "searchMarking", defaultValue = "false") boolean searchMarking) {
         try {
-            return ResponseEntity.ok(manageJobsService.processFile(file, jobId));
+            return ResponseEntity.ok(manageJobsService.processFile(file, jobId, searchMarking));
         } catch (NoSuchElementException ex) {
             return new ResponseEntity<>("Модели не удалось распознать инструменты на фото.", HttpStatus.UNPROCESSABLE_ENTITY);
         } catch (Exception e) {
+            e.printStackTrace();
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
@@ -108,21 +101,11 @@ public class JobContoller {
         }
     }
 
-    @GetMapping("/{jobId}/results/preprocess")
-    @Operation(summary = "Вывод результата предобработки - выделения макроклассов")
-    public ResponseEntity<?> getPreprocessResults(@PathVariable Long jobId) {
-        try {
-            return ResponseEntity.ok(jobService.getPreprocessResults(jobId));
-        } catch (Exception ex) {
-            return ResponseEntity.badRequest().body(ex.getMessage());
-        }
-    }
-
     @GetMapping("/{jobId}/results/classification")
     @Operation(summary = "Вывод результата классификации - выделения микроклассов")
     public ResponseEntity<?> getClassificationResults(@PathVariable Long jobId) {
         try {
-            return ResponseEntity.ok(jobService.getPredictionResults(jobId));
+            return ResponseEntity.ok(jobService.getClassificationResults(jobId));
         } catch (Exception ex) {
             return ResponseEntity.badRequest().body(ex.getMessage());
         }

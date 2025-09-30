@@ -51,6 +51,7 @@ public class OrderServiceImpl implements OrderService {
                 }
             }
         } catch (Exception e) {
+            e.printStackTrace();
             log.error("Ошибка добавления заказа в хранилище: {}", e.getMessage());
         }
     }

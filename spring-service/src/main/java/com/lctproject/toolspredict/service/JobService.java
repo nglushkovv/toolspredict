@@ -23,9 +23,7 @@ public interface JobService {
 
     List<MinioFile> getJobFiles(Long jobId, BucketType type);
 
-    List<PreprocessResult> getPreprocessResults(Long jobId);
-
-    List<PredictionResult> getPredictionResults(Long jobId);
+    List<ClassificationResult> getClassificationResults(Long jobId);
 
     Job createTestJob();
 }

@@ -26,8 +26,7 @@ import java.util.UUID;
 public class JobServiceImpl implements JobService {
     private final ProcessingJobsRepository processingJobsRepository;
     private final OrderRepository orderRepository;
-    private final PreprocessResultRepository preprocessResultRepository;
-    private final PredictionResultRepository predictionResultRepository;
+    private final ClassificationResultRepository classificationResultRepository;
     private final MinioFileService minioFileService;
     private final AccountingRepository accountingRepository;
 
@@ -99,15 +98,9 @@ public class JobServiceImpl implements JobService {
     }
 
     @Override
-    public List<PreprocessResult> getPreprocessResults(Long jobId) {
+    public List<ClassificationResult> getClassificationResults(Long jobId) {
         Job job = getJob(jobId);
-        return preprocessResultRepository.findByJob(job);
-    }
-
-    @Override
-    public List<PredictionResult> getPredictionResults(Long jobId) {
-        Job job = getJob(jobId);
-        return predictionResultRepository.findByJob(job);
+        return classificationResultRepository.findByJob(job);
     }
 
     public List<Tool> getToolResults(Long jobId) {
