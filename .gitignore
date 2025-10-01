@@ -27,4 +27,4 @@
 /inference-service/venv/
 /preprocess-service/venv/
 venv/
-.env
+/.env

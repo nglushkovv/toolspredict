@@ -30,8 +30,6 @@ public class LogServiceImpl implements LogService {
     private String bucketRaw;
     @Value("${integrations.minio.bucket.processed}")
     private String bucketProcessed;
-    @Value("${integrations.minio.bucket.results}")
-    private String bucketResults;
 
     @Override
     public void logClassificationResult(Long jobId, ClassificationResultDTO classificationResultDTO, String processedFileKey) {

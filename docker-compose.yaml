@@ -10,6 +10,11 @@ services:
       - "5454:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   minio:
     image: minio/minio
@@ -22,6 +27,11 @@ services:
       - "9001:9001"
     volumes:
       - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   spring-service:
     build: ./spring-service
@@ -40,8 +50,10 @@ services:
     ports:
       - "${SPRING_PORT:-8087}:8080"
     depends_on:
-      - postgres
-      - minio
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
 
   recognition-service:
     build: ./recognition-service
@@ -52,10 +64,12 @@ services:
       - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
       - MINIO_BUCKET_RAW=bucket-raw
       - MINIO_BUCKET_PROCESSED=bucket-processed
-      - MINIO_BUCKET_RESULTS=bucket-results
       - PORT=${RECOGNITION_PORT_PORT:-8001}
     ports:
       - "${RECOGNITION_PORT:-8001}:8001"
+    depends_on:
+      minio:
+        condition: service_healthy
 
   enrichment-service:
     build: ./enrichment-service
@@ -66,17 +80,20 @@ services:
       - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
       - MINIO_BUCKET_RAW=bucket-raw
       - MINIO_BUCKET_PROCESSED=bucket-processed
-      - MINIO_BUCKET_RESULTS=bucket-results
       - PORT=${ENRICHMENT_PORT:-8002}
     ports:
       - "${ENRICHMENT_PORT:-8002}:8002"
+    depends_on:
+      minio:
+        condition: service_healthy
+
   frontend:
-      build:
-        context: ./frontend
-      ports:
-        - "${FRONTEND_PORT:-8088}:80"
-      depends_on:
-        - spring-service
+    build:
+      context: ./frontend
+    ports:
+      - "${FRONTEND_PORT:-8088}:80"
+    depends_on:
+      - spring-service
 
 volumes:
   pgdata:

@@ -36,7 +36,6 @@ integrations:
         bucket:
             raw: "bucket-raw"
             processed: "bucket-processed"
-            results: "bucket-results"
     services:
         url:
             recognition: ${RECOGNITION_SERVICE_URL:http://localhost:8001}

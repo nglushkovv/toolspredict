@@ -28,8 +28,6 @@ public class MinioServiceImpl implements MinioService {
     private String bucketRaw;
     @Value("${integrations.minio.bucket.processed}")
     private String bucketProcessed;
-    @Value("${integrations.minio.bucket.results}")
-    private String bucketResult;
     @Value("${minio.endpoint}")
     private String minioEndpoint;
     @Value("${minio.access.key}")
@@ -56,7 +54,6 @@ public class MinioServiceImpl implements MinioService {
            );
            createBucketIfNotExists(bucketRaw);
            createBucketIfNotExists(bucketProcessed);
-           createBucketIfNotExists(bucketResult);
        } catch (Exception e) {
            log.error("Ошибка создания бакетов в MinioService: {}", e.getMessage());
        }
