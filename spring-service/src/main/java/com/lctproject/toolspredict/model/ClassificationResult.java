@@ -20,7 +20,7 @@ public class ClassificationResult {
     @ManyToOne
     @JoinColumn(name = "tool_id")
     private Tool tool;
-    @ManyToOne
+    @OneToOne
     @JoinColumn(name = "file_id")
     private MinioFile file;
     @ManyToOne
