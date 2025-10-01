@@ -26,9 +26,12 @@ minio_client = Minio(
     secret_key=settings.minio_secret_key,
     secure=False
 )
+class KeyRequest(BaseModel):
+    key: str
 
 @app.post("/recognize")
-async def recognize(key: str = Query(..., description="Ключ файла в Minio")):
+async def recognize(request: KeyRequest):
+    key = request.key
     bucket_raw = settings.minio_bucket_raw
     bucket_processed = settings.minio_bucket_processed
     try:
@@ -110,7 +113,8 @@ async def recognize(key: str = Query(..., description="Ключ файла в Mi
 
 
 @app.post("/video/cut")
-async def video_preprocess(key: str = Query(..., description="Ключ видео в Minio")):
+async def video_preprocess(request: KeyRequest):
+    key = request.key
     bucket_raw = settings.minio_bucket_raw
 
     try:

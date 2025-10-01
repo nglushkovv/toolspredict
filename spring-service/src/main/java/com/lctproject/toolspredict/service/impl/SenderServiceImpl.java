@@ -1,6 +1,7 @@
 package com.lctproject.toolspredict.service.impl;
 
 import com.lctproject.toolspredict.dto.*;
+import com.lctproject.toolspredict.model.KeyRequest;
 import com.lctproject.toolspredict.service.SenderService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.*;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.nio.charset.StandardCharsets;
 import java.util.NoSuchElementException;
 
 @Slf4j
@@ -29,10 +31,8 @@ public class SenderServiceImpl implements SenderService {
     public ResponseEntity<ClassificationResponseDTO> sendToRecognition(String minioKey) {
         try {
             log.info("Отправка ключа файла в сервис предобработки...");
-            String url = UriComponentsBuilder.fromUriString(preprocessServiceUrl + "/recognize")
-                    .queryParam("key", minioKey)
-                    .toUriString();
-            ResponseEntity<ClassificationResponseDTO> response = restTemplate.postForEntity(url, null, ClassificationResponseDTO.class);
+            KeyRequest request = new KeyRequest(minioKey);
+            ResponseEntity<ClassificationResponseDTO> response = restTemplate.postForEntity(preprocessServiceUrl + "/recognize", request, ClassificationResponseDTO.class);
             if (response.getStatusCode().is2xxSuccessful()) {
                 log.info("Файл с ключем {} успешно обработан.", minioKey);
                 return ResponseEntity.ok(response.getBody());
@@ -75,10 +75,8 @@ public class SenderServiceImpl implements SenderService {
     public ResponseEntity<FrameResponse> sendVideoToCut(String minioKey) {
         try {
             log.info("Отправка ключа видеофайла на разделение по кадрам");
-            String url = UriComponentsBuilder.fromUriString(preprocessServiceUrl + "/video/cut")
-                    .queryParam("key", minioKey)
-                    .toUriString();
-            ResponseEntity<FrameResponse> response = restTemplate.postForEntity(url, null, FrameResponse.class);
+            KeyRequest request = new KeyRequest(minioKey);
+            ResponseEntity<FrameResponse> response = restTemplate.postForEntity(preprocessServiceUrl + "/video/cut", request, FrameResponse.class);
             if (response.getStatusCode().is2xxSuccessful()) {
                 log.info("Файл с ключем {} успешно разделен по кадрам.", minioKey);
                 return ResponseEntity.ok(response.getBody());
