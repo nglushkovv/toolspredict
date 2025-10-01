@@ -73,7 +73,7 @@ async def recognize(key: str = Query(..., description="Ключ файла в Mi
 
             for i, box in enumerate(results[0].boxes):
                 class_id = int(box.cls[0])
-                conf = calibrate_score(float(box.conf[0]))
+                conf = float(calibrate_score(float(box.conf[0])))
                 xyxy = [float(x) for x in box.xyxy[0].tolist()]
                 micro_class = yolo_model.names[class_id]
                 base_key = os.path.splitext(key)[0]
