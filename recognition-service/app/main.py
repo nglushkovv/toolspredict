@@ -14,6 +14,8 @@ import json
 from datetime import datetime
 from ultralytics import YOLO
 import av
+import joblib
+from sklearn.isotonic import IsotonicRegression
 
 app = FastAPI()
 
@@ -28,6 +30,17 @@ minio_client = Minio(
 )
 class KeyRequest(BaseModel):
     key: str
+
+
+@app.on_event("startup")
+async def startup_event():
+    global iso_calibrator
+    iso_calibrator = joblib.load('model/isotonic_reg.pkl')
+
+def calibrate_score(conf):
+    cal_score = iso_calibrator.transform([conf])[0]
+    return cal_score
+    
 
 @app.post("/recognize")
 async def recognize(request: KeyRequest):
@@ -63,7 +76,7 @@ async def recognize(request: KeyRequest):
 
             for i, box in enumerate(results[0].boxes):
                 class_id = int(box.cls[0])
-                conf = float(box.conf[0])
+                conf = float(calibrate_score(float(box.conf[0])))
                 xyxy = [float(x) for x in box.xyxy[0].tolist()]
                 micro_class = yolo_model.names[class_id]
                 base_key = os.path.splitext(key)[0]
