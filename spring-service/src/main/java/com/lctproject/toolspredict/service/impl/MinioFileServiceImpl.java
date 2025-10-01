@@ -167,19 +167,26 @@ public class MinioFileServiceImpl implements MinioFileService {
             while ((entry = zis.getNextEntry()) != null) {
                 if (!entry.isDirectory()) {
                     String fileName = entry.getName();
+
+                    if (fileName.startsWith("__MACOSX/") || fileName.endsWith(".DS_Store")) {
+                        log.debug("Пропущен служебный файл macOS: " + fileName);
+                        zis.closeEntry();
+                        continue;
+                    }
+
                     log.info("Загружаем: " + fileName);
                     MinioFile newFile = new MinioFile()
                             .setBucketName(bucketRaw)
                             .setFileName(fileName)
                             .setFilePath(job.getId() + "/" + fileName)
                             .setPackageId(job);
+
                     minioFileRepository.save(newFile);
                     minioService.uploadFileFromStream(fileName, zis, entry.getSize(), job.getId());
                     result.add(newFile.getFilePath());
                     zis.closeEntry();
                 }
             }
-
         } catch (IOException e) {
             throw new RuntimeException("Ошибка при обработке архива", e);
         }
