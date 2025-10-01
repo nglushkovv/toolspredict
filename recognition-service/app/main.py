@@ -15,6 +15,7 @@ from datetime import datetime
 from ultralytics import YOLO
 import av
 import joblib
+from sklearn.isotonic import IsotonicRegression
 
 app = FastAPI()
 
@@ -32,7 +33,7 @@ minio_client = Minio(
 @app.on_event("startup")
 async def startup_event():
     global iso_calibrator
-    iso_calibrator = joblib.load('model/model.pkl')
+    iso_calibrator = joblib.load('model/isotonic_reg.pkl')
 
 def calibrate_score(conf):
     cal_score = iso_calibrator.transform([conf])[0]

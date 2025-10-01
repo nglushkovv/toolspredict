@@ -4,6 +4,8 @@ pydantic
 python-dotenv
 pydantic-settings
 minio
+joblib
+scikit-learn
 numpy<2.0
 Pillow==10.0.1
 opencv-python-headless<4.9.0
