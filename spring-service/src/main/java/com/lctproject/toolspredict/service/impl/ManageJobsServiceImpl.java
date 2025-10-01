@@ -77,7 +77,7 @@ public class ManageJobsServiceImpl implements ManageJobsService {
         String fileName = file.getOriginalFilename();
         log.info(String.valueOf(jobId));
         log.info(fileName);
-        switch (Objects.requireNonNull(fileName).substring(fileName.lastIndexOf('.')+1)) {
+        switch (Objects.requireNonNull(fileName).substring(fileName.lastIndexOf('.')+1).toLowerCase()) {
             case "png", "mp4", "jpg" -> {
                 Job job = jobService.getJob(jobId);
                 return minioFileService.create(bucketRaw, file, job).getFilePath();
