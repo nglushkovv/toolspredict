@@ -25,6 +25,13 @@ export const ImageWithBbox = ({
   const [error, setError] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  // Truncate confidence (0-1) to percentage with two decimals without rounding
+  const formatTruncatedPercent = (value0to1: number): string => {
+    const rawPercent = value0to1 * 100;
+    const truncated = Math.floor(rawPercent * 100) / 100; // two decimals, truncated
+    return truncated.toFixed(2);
+  };
+
   useEffect(() => {
     loadImageData();
     return () => {
@@ -97,7 +104,7 @@ export const ImageWithBbox = ({
       ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
 
       // Draw label background - larger and more visible
-      const labelText = `${toolName} (${Math.round(confidence * 100)}%)`;
+      const labelText = `${toolName} (${formatTruncatedPercent(confidence)}%)`;
       const labelPadding = 12;
       const labelHeight = 32;
       const fontSize = Math.max(16, Math.min(img.width, img.height) / 50); // Dynamic font size
@@ -205,7 +212,7 @@ export const ImageWithBbox = ({
             Распознанный инструмент: <span className="font-medium">{toolName}</span>
           </div>
           <div className="text-sm text-muted-foreground">
-            Уверенность модели: <span className="font-medium">{Math.round(confidence * 100)}%</span>
+            Уверенность модели: <span className="font-medium">{formatTruncatedPercent(confidence)}%</span>
           </div>
           
           <div className="relative">

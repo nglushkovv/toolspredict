@@ -1,5 +1,6 @@
 package com.lctproject.toolspredict.controller;
 
+import com.lctproject.toolspredict.dto.JobStatus;
 import com.lctproject.toolspredict.model.Job;
 import com.lctproject.toolspredict.service.JobService;
 import com.lctproject.toolspredict.service.ManageJobsService;
@@ -33,15 +34,15 @@ public class TestController {
                                         @RequestParam("file") MultipartFile file,
                                         @Parameter(description = "Стоит ли выполнять поиск маркировок? Внимание: время распознавания сильно увеличится.")
                                         @RequestParam(value = "searchMarking", defaultValue = "false") boolean searchMarking) {
+        Job job = jobService.createTestJob();
         try {
-            Job job = jobService.createTestJob();
             manageJobsService.testModels(job, file, searchMarking);
             return ResponseEntity.accepted().body(job.getId());
         } catch (NoSuchElementException ex) {
-            ex.printStackTrace();
+            jobService.updateStatus(job.getId(), JobStatus.FAILED);
             return new ResponseEntity<>("Модели не удалось распознать инструменты на фото.", HttpStatus.UNPROCESSABLE_ENTITY);
         } catch (Exception e) {
-            e.printStackTrace();
+            jobService.updateStatus(job.getId(), JobStatus.FAILED);
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }

@@ -85,8 +85,20 @@ export const TestModelResults = ({ jobId, searchMarking, onBack, onComplete }: T
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
   const [jobStatus, setJobStatus] = useState<string>("STARTED");
   const [isPolling, setIsPolling] = useState<boolean>(true);
+  const [modelThreshold, setModelThreshold] = useState<number | null>(null);
   const pollRef = useRef<number | null>(null);
   const { toast } = useToast();
+
+  // Helper function to truncate confidence to 2 decimal places
+  const truncateConfidence = (confidence: number): number => {
+    return Math.floor(confidence * 100) / 100;
+  };
+
+  // Helper function to check if confidence is below threshold
+  const isLowConfidence = (confidence: number): boolean => {
+    if (modelThreshold === null) return false;
+    return truncateConfidence(confidence) < truncateConfidence(modelThreshold);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -95,13 +107,15 @@ export const TestModelResults = ({ jobId, searchMarking, onBack, onComplete }: T
       try {
         setLoading(true);
         setError(null);
-        const [classificationData, rawFilesData] = await Promise.all([
+        const [classificationData, rawFilesData, threshold] = await Promise.all([
           apiService.getClassificationResults(jobId),
-          apiService.getJobFiles(jobId, 'RAW')
+          apiService.getJobFiles(jobId, 'RAW'),
+          apiService.getModelThreshold().catch(() => null)
         ]);
         if (cancelled) return;
         setResults(classificationData);
         setRawFiles(rawFilesData);
+        setModelThreshold(threshold);
       } catch (error) {
         if (cancelled) return;
         console.error('Failed to fetch test results:', error);
@@ -159,12 +173,14 @@ export const TestModelResults = ({ jobId, searchMarking, onBack, onComplete }: T
   }, [jobId, toast]);
 
   const getConfidenceColor = (confidence: number) => {
+    if (isLowConfidence(confidence)) return "bg-orange-100 text-orange-800";
     if (confidence >= 0.8) return "bg-green-100 text-green-800";
     if (confidence >= 0.6) return "bg-yellow-100 text-yellow-800";
     return "bg-red-100 text-red-800";
   };
 
   const getConfidenceBadge = (confidence: number) => {
+    if (isLowConfidence(confidence)) return "Ниже порога";
     if (confidence >= 0.8) return "Высокая";
     if (confidence >= 0.6) return "Средняя";
     return "Низкая";
@@ -420,7 +436,11 @@ export const TestModelResults = ({ jobId, searchMarking, onBack, onComplete }: T
                                   <h6 className="font-medium text-sm">Результаты классификации</h6>
                                   <div className="text-sm space-y-1">
                                     <div>
-                                      <span className="font-medium">Уверенность:</span> {(result.confidence * 100).toFixed(1)}%
+                                      <span className="font-medium">Уверенность:</span> 
+                                      <span className={`ml-1 ${isLowConfidence(result.confidence) ? 'text-orange-500 font-medium' : ''}`}>
+                                        {(truncateConfidence(result.confidence * 100)).toFixed(2)}%
+                                        {isLowConfidence(result.confidence) && <span className="text-orange-500 ml-1">⚠</span>}
+                                      </span>
                                     </div>
                                     <div>
                                       <span className="font-medium">Время обработки:</span> {new Date(result.createdAt).toLocaleString('ru-RU')}
@@ -429,9 +449,9 @@ export const TestModelResults = ({ jobId, searchMarking, onBack, onComplete }: T
                                       <span className="font-medium">Статус:</span> 
                                       <Badge 
                                         variant="outline" 
-                                        className={`ml-2 ${result.confidence >= 0.8 ? 'border-green-500 text-green-700' : result.confidence >= 0.6 ? 'border-yellow-500 text-yellow-700' : 'border-red-500 text-red-700'}`}
+                                        className={`ml-2 ${isLowConfidence(result.confidence) ? 'border-orange-500 text-orange-700' : result.confidence >= 0.8 ? 'border-green-500 text-green-700' : result.confidence >= 0.6 ? 'border-yellow-500 text-yellow-700' : 'border-red-500 text-red-700'}`}
                                       >
-                                        {result.confidence >= 0.8 ? 'Высокая точность' : result.confidence >= 0.6 ? 'Средняя точность' : 'Низкая точность'}
+                                        {isLowConfidence(result.confidence) ? 'Ниже порога' : result.confidence >= 0.8 ? 'Высокая точность' : result.confidence >= 0.6 ? 'Средняя точность' : 'Низкая точность'}
                                       </Badge>
                                     </div>
                                   </div>

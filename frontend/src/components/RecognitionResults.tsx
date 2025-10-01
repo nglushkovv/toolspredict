@@ -57,6 +57,7 @@ export const RecognitionResults = ({ orderNumber, orderId, actionType, jobId, on
   const { toast } = useToast();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [modelThreshold, setModelThreshold] = useState<number | null>(null);
   
   const actionTitle = actionType === "issue" ? "Выдача инструментария" : "Сдача инструментария";
   
@@ -66,6 +67,18 @@ export const RecognitionResults = ({ orderNumber, orderId, actionType, jobId, on
   
   const isCompleteMatch = notFoundItems === 0 && unexpectedItems === 0;
 
+  // Helper function to truncate confidence to 2 decimal places
+  const truncateConfidence = (confidence: number): number => {
+    return Math.floor(confidence * 100) / 100;
+  };
+
+  // Helper function to check if confidence is below threshold
+  const isLowConfidence = (confidence: number): boolean => {
+    if (modelThreshold === null) return false;
+    // confidence is stored in percent (0-100), modelThreshold comes as fraction (0-1)
+    return truncateConfidence(confidence / 100) < truncateConfidence(modelThreshold);
+  };
+
   useEffect(() => {
     loadResults();
   }, [jobId, orderId]);
@@ -73,10 +86,14 @@ export const RecognitionResults = ({ orderNumber, orderId, actionType, jobId, on
   const loadResults = async () => {
     try {
       setLoading(true);
-      const [orderTools, detailedResults] = await Promise.all([
+      const [orderTools, detailedResults, threshold] = await Promise.all([
         apiService.getOrderTools(orderId), // returns ApiOrderTool[]
         apiService.getDetailedResults(jobId), // returns ApiRecognitionResultDetailed[]
+        apiService.getModelThreshold().catch(() => null), // returns number or null
       ]);
+
+      // Set model threshold
+      setModelThreshold(threshold);
 
       const orderedToolIds = new Set<number>(
         orderTools.map((ot: any) => ot.tool?.id ?? ot.toolId)
@@ -141,7 +158,7 @@ export const RecognitionResults = ({ orderNumber, orderId, actionType, jobId, on
           });
         }
         
-        const confidence = bestRecognition ? Math.round(bestRecognition.confidence * 100) : undefined;
+        const confidence = bestRecognition ? truncateConfidence(bestRecognition.confidence * 100) : undefined;
         const found = bestRecognition ? 1 : 0;
         const recogMarking = bestRecognition?.marking;
         
@@ -185,7 +202,7 @@ export const RecognitionResults = ({ orderNumber, orderId, actionType, jobId, on
             required: 0,
             found: 1,
             status: 'not_expected',
-            confidence: typeof r.confidence === 'number' ? Math.round(r.confidence * 100) : undefined,
+            confidence: typeof r.confidence === 'number' ? truncateConfidence(r.confidence * 100) : undefined,
             marking: r.marking,
             markingStatus: "not_specified",
             // Add image data
@@ -414,7 +431,13 @@ export const RecognitionResults = ({ orderNumber, orderId, actionType, jobId, on
                                   <div className="flex items-center space-x-2">
                                     <p className="text-xs text-muted-foreground">{getStatusDescription(item.status)}</p>
                                     {item.confidence && (
-                                      <p className="text-xs text-muted-foreground">• Уверенность: {item.confidence}%</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        • Уверенность: 
+                                        <span className={`ml-1 ${isLowConfidence(item.confidence) ? 'text-orange-500 font-medium' : ''}`}>
+                                          {item.confidence.toFixed(2)}%
+                                          {isLowConfidence(item.confidence) && <span className="text-orange-500 ml-1">⚠</span>}
+                                        </span>
+                                      </p>
                                     )}
                                   </div>
                                 </div>

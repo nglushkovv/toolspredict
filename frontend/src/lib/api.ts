@@ -384,6 +384,12 @@ class ApiService {
     return response.json();
   }
 
+  // Model configuration
+  async getModelThreshold(): Promise<number> {
+    const response = await this.makeRequest(`${API_BASE_URL}/config/model/threshold`);
+    return response.json();
+  }
+
   // Tools
   async getTools(): Promise<ApiToolsResponse> {
     const response = await this.makeRequest(`${API_BASE_URL}/tools`);

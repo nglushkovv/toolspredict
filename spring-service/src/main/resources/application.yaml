@@ -48,4 +48,4 @@ logging:
 
 model:
     confidence:
-        threshold: 0.60
+        threshold: 0.98

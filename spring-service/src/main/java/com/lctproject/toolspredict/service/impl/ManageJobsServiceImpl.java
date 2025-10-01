@@ -98,7 +98,6 @@ public class ManageJobsServiceImpl implements ManageJobsService {
             for (Map.Entry<String, ClassificationResultDTO> entry : classificationResponseDTO.getResults().entrySet()){
                 minioFileService.create(bucketProcessed, entry.getKey(), job);
             }
-            if (!job.getStatus().equals("TEST")) jobService.updateStatus(job.getId(), JobStatus.FINISHED);
             return classificationResponseDTO;
         } catch (NoSuchElementException e) {
             throw new NoSuchElementException(e.getMessage());
