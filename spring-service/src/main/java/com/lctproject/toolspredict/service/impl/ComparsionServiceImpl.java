@@ -1,5 +1,6 @@
 package com.lctproject.toolspredict.service.impl;
 
+import com.lctproject.toolspredict.component.ConfidenceThresholdConfig;
 import com.lctproject.toolspredict.dto.JobStatus;
 import com.lctproject.toolspredict.model.ClassificationResult;
 import com.lctproject.toolspredict.model.Job;
@@ -29,6 +30,7 @@ public class ComparsionServiceImpl implements ComparsionService {
     private final AccountingRepository accountingRepository;
     private final JobService jobService;
     private final OrderService orderService;
+    private final ConfidenceThresholdConfig confidenceThresholdConfig;
 
     @Override
     public ResponseEntity<?> compareResults(Job job) {
@@ -85,7 +87,7 @@ public class ComparsionServiceImpl implements ComparsionService {
 
     public List<ClassificationResult> mergeByMaxOccurrences(Map<Long, List<ClassificationResult>> groupedByOriginalFile) {
         Map<Long, List<ClassificationResult>> resultMap = new HashMap<>();
-
+        double confidenceThreshold = confidenceThresholdConfig.getConfidenceThreshold();
         for (List<ClassificationResult> list : groupedByOriginalFile.values()) {
             log.info("Processing list: {}", list);
 
@@ -96,8 +98,25 @@ public class ComparsionServiceImpl implements ComparsionService {
                 long toolId = entry.getKey();
                 List<ClassificationResult> items = entry.getValue();
 
-                if (!resultMap.containsKey(toolId) || items.size() > resultMap.get(toolId).size()) {
+                if (!resultMap.containsKey(toolId)) {
                     resultMap.put(toolId, items);
+                } else {
+                    List<ClassificationResult> existingItems = resultMap.get(toolId);
+
+                    if (items.size() > existingItems.size()) {
+                        resultMap.put(toolId, items);
+                    } else if (items.size() == existingItems.size()) {
+                        long newHighConfidenceCount = items.stream()
+                                .filter(cr -> cr.getConfidence() >= confidenceThreshold)
+                                .count();
+                        long existingHighConfidenceCount = existingItems.stream()
+                                .filter(cr -> cr.getConfidence() >= confidenceThreshold)
+                                .count();
+
+                        if (newHighConfidenceCount > existingHighConfidenceCount) {
+                            resultMap.put(toolId, items);
+                        }
+                    }
                 }
             }
         }
