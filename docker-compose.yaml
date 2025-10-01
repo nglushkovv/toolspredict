@@ -92,8 +92,9 @@ services:
       context: ./frontend
     ports:
       - "${FRONTEND_PORT:-8088}:80"
-    depends_on:
-      - spring-service
+    ddepends_on:
+      spring-service:
+        condition: service_healthy
 
 volumes:
   pgdata:
