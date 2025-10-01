@@ -57,7 +57,7 @@ export const FileUpload = ({ orderNumber, actionType, jobId, onBack, onNext }: F
   const reloadFilesFromAPI = async () => {
     const [apiFiles, classificationResults] = await Promise.all([
       apiService.getJobFiles(jobId, 'RAW'),
-      apiService.getDetailedResults(jobId).catch(() => []),
+      apiService.getClassificationResults(jobId).catch(() => []),
     ]);
     
     // Build set of successfully classified original fileIds

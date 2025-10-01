@@ -127,6 +127,7 @@ const Index = () => {
     }
   }, [orders, currentView, selectedOrderId, toast]);
 
+
   const loadOrders = async (targetPage = 0, append = false) => {
     try {
       if (append) setLoadingMore(true); else setLoading(true);
@@ -589,7 +590,14 @@ const Index = () => {
           <div>Order: {selectedOrderId || 'none'}</div>
           <div>TestJob: {testJobData?.jobId || 'none'}</div>
           <button 
-            onClick={handleEmergencyReset}
+            onClick={() => {
+              setCurrentView("orders");
+              setSelectedOrderId(null);
+              setJobData(null);
+              setTestJobData(null);
+              localStorage.removeItem('afl-tools-ui-state');
+              window.location.reload();
+            }}
             className="bg-red-500 px-2 py-1 rounded mt-1 mr-1"
           >
             Emergency Reset

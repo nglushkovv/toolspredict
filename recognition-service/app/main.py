@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from minio import Minio
 import imageio.v3 as iio
 from app.SeekableMinioStream import SeekableMinioStream
