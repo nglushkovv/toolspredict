@@ -93,8 +93,8 @@ services:
     ports:
       - "${FRONTEND_PORT:-8088}:80"
     depends_on:
-      spring-service:
-        condition: service_healthy
+      - spring-service
+    entrypoint: /bin/sh -c "sleep 10 && nginx -g 'daemon off;'"
 
 volumes:
   pgdata:
