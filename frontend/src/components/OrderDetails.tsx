@@ -92,7 +92,7 @@ export const OrderDetails = ({ order, actionType, onBack, onNext }: OrderDetails
                 <div className="flex items-center space-x-2">
                   <Plane className="h-4 w-4 text-muted-foreground" />
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">Воздушное судно</p>
+                    <p className="text-sm font-medium text-muted-foreground">Описание заказа</p>
                     <p className="font-medium">{order.aircraft}</p>
                   </div>
                 </div>

@@ -522,7 +522,7 @@ export const FileUpload = ({ orderNumber, actionType, jobId, onBack, onNext }: F
                       <div>
                         <p className="font-medium">{file.name}</p>
                         <p className="text-sm text-muted-foreground">
-                          {formatFileSize(file.size)} • {file.uploadDate.toLocaleTimeString('ru-RU')}
+                          {file.uploadDate.toLocaleTimeString('ru-RU')}
                         </p>
                         {file.status === "error" && file.errorMessage && (
                           <p className="text-sm text-destructive mt-1">{file.errorMessage}</p>
