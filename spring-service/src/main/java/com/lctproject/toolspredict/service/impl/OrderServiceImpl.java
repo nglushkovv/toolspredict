@@ -84,8 +84,8 @@ public class OrderServiceImpl implements OrderService {
     public void deleteOrder(UUID orderId) {
         List<Accounting> accountingList = accountingRepository.findByOrder(getOrder(orderId));
         for (Accounting accounting: accountingList) {
-            jobService.deleteJob(accounting.getJob().getId());
             accountingRepository.delete(accounting);
+            jobService.deleteJob(accounting.getJob().getId());
         }
         orderRepository.deleteById(orderId);
     }
