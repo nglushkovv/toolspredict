@@ -7,13 +7,11 @@ import com.lctproject.toolspredict.service.ManageJobsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.NoSuchElementException;
 
 @CrossOrigin
 @RestController
@@ -38,11 +36,8 @@ public class TestController {
         try {
             manageJobsService.testModels(job, file, searchMarking);
             return ResponseEntity.accepted().body(job.getId());
-        } catch (NoSuchElementException ex) {
-            jobService.updateStatus(job.getId(), JobStatus.FAILED);
-            return new ResponseEntity<>("Модели не удалось распознать инструменты на фото.", HttpStatus.UNPROCESSABLE_ENTITY);
         } catch (Exception e) {
-            jobService.updateStatus(job.getId(), JobStatus.FAILED);
+            jobService.updateStatus(job.getId(), JobStatus.FINISHED);
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
